@@ -59,7 +59,7 @@ Multinary joins them. Connect as many accounts as you like and you get:
 **For developers**
 - An external upload API at `POST /api/v1/uploads` with API keys. Keys are shown once, stored hashed, track when they were last used, and can be revoked.
 - `GET /files/:id/view-url` returns the direct public URL of a Cloudinary file.
-- In-app API docs with cURL and JavaScript examples.
+- In-app API docs with cURL and JavaScript examples. Full reference: [`docs/API.md`](docs/API.md).
 
 **Accounts and admin**
 - Email/password sign-up (optional reCAPTCHA) or **Continue with Google**, which connects your first Drive automatically.
