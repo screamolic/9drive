@@ -34,6 +34,11 @@ Turn this fork of 9Drive into **Multinary**: one dashboard and API that pools ma
 - `providerFileId` build/parse round trip, resource-type mapping, and that the longest allowed value fits `File.providerFileId` (VARCHAR 191).
 - `frontend`: `npm run build` passes (including the queue changes to the API Keys page).
 
+### S3 bugs fixed (inherited from 9Drive)
+
+- `POST /connected-accounts/s3` no longer requires a saved Google config (`providerConfigId` is nullable and only Google code uses it) and no longer returns the encrypted token fields.
+- Deleting a folder now deletes S3 and Cloudinary objects too (it used the Google client for every file, failed silently, and left orphaned objects) and re-syncs quota with the right provider. Not yet exercised against real storage.
+
 ### NOT verified (do this first)
 
 The authoring sandbox could not download Prisma engines, so these never ran:
@@ -45,6 +50,7 @@ The authoring sandbox could not download Prisma engines, so these never ran:
 - [ ] S3 public URL against a real bucket: connect one with and without `publicBaseUrl`, upload an image, take `mediaUrl` from `GET /api/v1/files` and run `curl -I` on it (must be 200). Confirm the URL shape for each service the owner uses (AWS, R2, MinIO, Wasabi, B2). The URL builder itself is unit-checked, but nothing proves a given bucket is public.
 - [ ] Queue API against a real DB: create a key with the three queue scopes, `POST /queue` with a Cloudinary file id, `POST /queue/claim` twice in parallel (only one call may get the item), `PATCH` it to `posted` and to `failed`, `PATCH` to `pending` to retry, and check a future `scheduledAt` is skipped. Also check 422 `FILE_NOT_PUBLIC` for a Drive/S3 file and that a key without the scope gets 403.
 - [ ] Backend type-check cannot see `prisma.queueItem` until the Prisma client is generated, so TypeScript has not really checked the queue and files routes yet. Run `npm run build` after `prisma generate`.
+- [ ] S3 fixes: connect an S3 bucket on an install with **no** Google credentials saved (must succeed, and the response must not contain `accessTokenEncrypted`); create a folder, upload an S3 and a Cloudinary file into it, delete the folder, and confirm both objects are gone from the buckets.
 - [ ] Connect two accounts and confirm routing (most available, round robin, priority) alternates between them.
 
 If anything fails, the most likely suspects are the multipart upload in `uploadCloudinaryObject` and the Usage API field `storage.usage` (documented as bytes, but the response shape was confirmed from a third-party article, not Cloudinary's reference).
@@ -55,9 +61,6 @@ If anything fails, the most likely suspects are the multipart upload in `uploadC
 - **Free-plan limits.** Per-file size caps apply (see `media_limits` in the Usage API response), and PDF/ZIP/raw delivery can be blocked until enabled in Cloudinary's security settings. The delivery error message already hints at this.
 - **Whole file is buffered in memory** before upload (same as the S3 and Drive paths). Large files and Cloudinary's chunked upload are not handled.
 - **Only public `upload`-type delivery** is supported. Private or authenticated assets are not.
-- The existing S3 connect route returns the account row including encrypted token fields; the Cloudinary route strips them. Worth fixing for S3 too.
-- The existing S3 connect route (`POST /connected-accounts/s3`) calls `findFirstOrThrow` on an active Google `ProviderConfig`, so S3 cannot be connected unless Google credentials were saved. `providerConfigId` is nullable, so this check can simply be dropped (Cloudinary already skips it).
-- The folder delete route calls the Google client for every file regardless of provider and swallows the error. For Cloudinary and S3 files this only moves them to Trash; permanent delete from Trash does remove them remotely.
 
 ## Plan (next steps, in order)
 

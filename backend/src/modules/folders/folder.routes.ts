@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { prisma } from '../../config/prisma.js'
 import { requireAuth, type AuthRequest } from '../../middleware/auth.middleware.js'
 import { getAuthedGoogleClient, syncGoogleQuota, ensureGoogleAppFolder } from '../google/google.service.js'
+import { deleteS3Object, syncS3Quota } from '../s3/s3.service.js'
+import { deleteCloudinaryObject, syncCloudinaryQuota } from '../cloudinary/cloudinary.service.js'
 import { createAuditLog } from '../../utils/audit.js'
 
 export const folderRouter = Router()
@@ -273,13 +275,20 @@ folderRouter.delete('/:id', async (req: AuthRequest, res, next) => {
     }
 
     const files = await prisma.file.findMany({ where: { userId: req.user!.id, status: 'active', folderId: { in: [...folderIds] } }, include: { connectedAccount: true } })
-    const syncedAccountIds = new Set<string>()
+    // accountId -> provider, so quota is re-synced with the right provider afterwards
+    const syncedAccounts = new Map<string, string>()
     for (const file of files) {
       try {
-        const auth = await getAuthedGoogleClient(file.connectedAccount)
-        const drive = google.drive({ version: 'v3', auth })
-        await drive.files.delete({ fileId: file.providerFileId })
-        syncedAccountIds.add(file.connectedAccountId)
+        if (file.provider === 's3') {
+          await deleteS3Object(file)
+        } else if (file.provider === 'cloudinary') {
+          await deleteCloudinaryObject(file)
+        } else {
+          const auth = await getAuthedGoogleClient(file.connectedAccount)
+          const drive = google.drive({ version: 'v3', auth })
+          await drive.files.delete({ fileId: file.providerFileId })
+        }
+        syncedAccounts.set(file.connectedAccountId, file.provider)
       } catch {
         // Keep going so one failure does not block the whole deletion
       }
@@ -293,7 +302,7 @@ folderRouter.delete('/:id', async (req: AuthRequest, res, next) => {
           const auth = await getAuthedGoogleClient(f.connectedAccount)
           const drive = google.drive({ version: 'v3', auth })
           await drive.files.delete({ fileId: f.providerFolderId })
-          if (f.connectedAccountId) syncedAccountIds.add(f.connectedAccountId)
+          if (f.connectedAccountId) syncedAccounts.set(f.connectedAccountId, 'google_drive')
         } catch {
           // ignore
         }
@@ -302,7 +311,10 @@ folderRouter.delete('/:id', async (req: AuthRequest, res, next) => {
 
     await prisma.file.updateMany({ where: { id: { in: files.map((file) => file.id) } }, data: { status: 'deleted', deletedAt: new Date() } })
     await prisma.folder.updateMany({ where: { id: { in: [...folderIds] }, userId: req.user!.id }, data: { deletedAt: new Date() } })
-    for (const accountId of syncedAccountIds) await syncGoogleQuota(accountId).catch(() => undefined)
+    for (const [accountId, provider] of syncedAccounts) {
+      const syncQuota = provider === 's3' ? syncS3Quota : provider === 'cloudinary' ? syncCloudinaryQuota : syncGoogleQuota
+      await syncQuota(accountId).catch(() => undefined)
+    }
 
     await createAuditLog(req.user!.id, 'DELETE_FOLDER', 'folder', root.id, { name: root.name })
     return res.json({ status: 'ok' })

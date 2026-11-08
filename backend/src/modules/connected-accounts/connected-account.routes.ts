@@ -94,14 +94,12 @@ async function createGoogleConnectUrl(req: AuthRequest) {
 connectedAccountRouter.post('/s3', requireAuth, async (req: AuthRequest, res, next) => {
   try {
     const body = s3ConnectSchema.parse(req.body)
-    const providerConfig = await prisma.providerConfig.findFirstOrThrow({ where: { provider: 'google_drive', status: 'active' }, orderBy: { createdAt: 'desc' } })
     const providerAccountId = `${body.bucket}:${body.endpoint || body.region}`
     const existingAccount = await prisma.connectedAccount.findUnique({ where: { userId_provider_providerAccountId: { userId: req.user!.id, provider: 's3', providerAccountId } } })
     const account = existingAccount
       ? await prisma.connectedAccount.update({
         where: { id: existingAccount.id },
         data: {
-          providerConfigId: providerConfig.id,
           email: `${body.bucket} (S3)`,
           displayName: body.name,
           accessTokenEncrypted: encryptText('s3'),
@@ -113,7 +111,6 @@ connectedAccountRouter.post('/s3', requireAuth, async (req: AuthRequest, res, ne
       })
       : await prisma.connectedAccount.create({ data: {
         userId: req.user!.id,
-        providerConfigId: providerConfig.id,
         provider: 's3',
         providerAccountId,
         email: `${body.bucket} (S3)`,
@@ -155,9 +152,10 @@ connectedAccountRouter.post('/s3', requireAuth, async (req: AuthRequest, res, ne
     try {
       await testS3Connection(config)
       const quota = await syncS3Quota(account.id)
+      const { accessTokenEncrypted: _a, refreshTokenEncrypted: _r, ...safeAccount } = account
       return res.status(201).json({
         account: {
-          ...account,
+          ...safeAccount,
           storageAccount: { ...quota, totalBytes: quota.totalBytes?.toString() ?? null, usedBytes: quota.usedBytes.toString(), availableBytes: quota.availableBytes?.toString() ?? null, trashBytes: quota.trashBytes?.toString() ?? null },
         },
       })

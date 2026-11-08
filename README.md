@@ -87,7 +87,7 @@ Then open **http://localhost:5173** and create an account. 🎉
 
 What happens behind the scenes:
 - The backend runs the database migrations on every start, so updating an existing install keeps your data.
-- Google is optional for Cloudinary. If `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` are real values, the Google config is saved automatically. If they are blank, the app still starts and Cloudinary accounts connect and work normally. You can add Google later in **Settings → Google Credentials**. (Known quirk: connecting an S3 bucket still expects a saved Google config to exist.)
+- Google is optional. If `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` are real values, the Google config is saved automatically. If they are blank, the app still starts, and Cloudinary and S3 accounts connect and work normally. You can add Google later in **Settings → Google Credentials**.
 
 | Service  | URL                     |
 | -------- | ----------------------- |
@@ -208,7 +208,7 @@ Things worth knowing:
 
 ## Connecting Google Drive
 
-Google sign-in and Drive access need a free OAuth client from **Google Cloud Console** (not Google Search Console). It takes about 10 minutes, once. Skip this section if you only use Cloudinary.
+Google sign-in and Drive access need a free OAuth client from **Google Cloud Console** (not Google Search Console). It takes about 10 minutes, once. Skip this section if you only use Cloudinary or S3.
 
 <details>
 <summary><b>Step-by-step Google Cloud setup</b></summary>
@@ -290,7 +290,7 @@ Captcha only turns on when **both** `VITE_RECAPTCHA_SITE_KEY` and `RECAPTCHA_SEC
    - `FRONTEND_URL`: your public frontend URL, e.g. `https://multinary.yourdomain.com`
    - `VITE_API_URL`: your public backend URL, e.g. `https://api.multinary.yourdomain.com`
    - Strong random values for `JWT_ACCESS_SECRET` and `TOKEN_ENCRYPTION_KEY`
-   - Only if you use Google Drive or S3: `GOOGLE_REDIRECT_URI` (e.g. `https://api.multinary.yourdomain.com/connected-accounts/google/callback`), `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+   - Only if you use Google Drive: `GOOGLE_REDIRECT_URI` (e.g. `https://api.multinary.yourdomain.com/connected-accounts/google/callback`), `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
 3. **Start it:** `docker compose up -d --build`
 4. **If you use Google Drive, update Google Cloud Console:** add your frontend URL under *Authorized JavaScript origins* and your redirect URI under *Authorized redirect URIs*.
 
