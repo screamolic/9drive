@@ -46,6 +46,7 @@ If anything fails, the most likely suspects are the multipart upload in `uploadC
 - **Whole file is buffered in memory** before upload (same as the S3 and Drive paths). Large files and Cloudinary's chunked upload are not handled.
 - **Only public `upload`-type delivery** is supported. Private or authenticated assets are not.
 - The existing S3 connect route returns the account row including encrypted token fields; the Cloudinary route strips them. Worth fixing for S3 too.
+- The existing S3 connect route (`POST /connected-accounts/s3`) calls `findFirstOrThrow` on an active Google `ProviderConfig`, so S3 cannot be connected unless Google credentials were saved. `providerConfigId` is nullable, so this check can simply be dropped (Cloudinary already skips it).
 - The folder delete route calls the Google client for every file regardless of provider and swallows the error. For Cloudinary and S3 files this only moves them to Trash; permanent delete from Trash does remove them remotely.
 
 ## Plan (next steps, in order)

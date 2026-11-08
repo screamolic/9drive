@@ -1,10 +1,8 @@
-![Multinary cover](https://i.ibb.co.com/35BySv1C/image.png)
-
 <h1 align="center">Multinary</h1>
 
 <p align="center">
-  <b>All your free cloud storage, in one drive.</b><br />
-  Connect several Google Drive accounts and S3 buckets, then use them as one self-hosted file manager.
+  <b>Many storage accounts, one drive.</b><br />
+  Pool several Cloudinary accounts, Google Drive accounts and S3 buckets behind one self-hosted file manager and upload API.
 </p>
 
 <p align="center">
@@ -12,73 +10,43 @@
   <img alt="Node.js 20+" src="https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white" />
   <img alt="MySQL 8+" src="https://img.shields.io/badge/mysql-8%2B-4479A1?logo=mysql&logoColor=white" />
   <img alt="Docker ready" src="https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white" />
-  <a href="https://9drive.zenhosta.com"><img alt="Live preview" src="https://img.shields.io/badge/live-preview-6366f1" /></a>
 </p>
 
-<p align="center">
-  <a href="docs/media/9drive-trailer.mp4">
-    <img src="docs/media/9drive-trailer.gif" alt="Multinary trailer: storage meters merge into one 380 GB drive, then the real dashboard connects accounts, routes uploads and shares a file" width="100%" />
-  </a>
-  <br />
-  <sub>▶ 32-second trailer. Click it to open the full-quality MP4 (<code>docs/media/9drive-trailer.mp4</code>).</sub>
-</p>
+> **Status:** Multinary is a fork of [9Drive](https://github.com/zenhosta/9drive) by Zenhosta, being reshaped around multi-account Cloudinary storage. The Cloudinary provider is new and has not yet been verified end to end against a real account. See [`docs/MULTINARY_PROGRESS.md`](docs/MULTINARY_PROGRESS.md) for what is done, what is still untested, and the plan.
 
 ---
 
 ## Why Multinary?
 
-Every Google account comes with 15 GB of free storage. If you have a few accounts, you have plenty of space, but it's split up, and one account always fills up first.
+Free storage tiers are small and scattered. One Google account gives you 15 GB, a free Cloudinary account is tied to monthly credits, and every account fills up on its own schedule.
 
-Multinary joins them together. Connect your Google Drive accounts (and any S3-compatible bucket), and you get:
+Multinary joins them. Connect as many accounts as you like and you get:
 
-- 📦 **One storage pool.** See the combined quota of every connected account on one dashboard.
-- 🧭 **Uploads that pick the right account.** Each file goes to an account that has enough room. You choose the rule: most free space, round-robin, or your own priority order.
+- 📦 **One storage pool.** See the combined usage of every connected account on one dashboard.
+- 🧭 **Uploads that pick the right account.** Each file goes to an account that has room. You choose the rule: most free space, round-robin, or your own priority order.
+- ☁️ **Cloudinary at the center.** Connect any number of Cloudinary accounts. Images, video and audio get a direct public URL that other tools can use.
 - 🗂️ **A normal file manager.** Folders, search, list and grid views, previews, rename, move, and bulk actions.
 - 🔗 **Sharing that works.** Public links with a built-in viewer, embeds, and invites for files and folders.
 - 🔌 **An upload API.** Send files from scripts or CI with an API key.
-- 🏠 **Your own server.** Files stream straight through your backend to your storage. Nothing is written to the server's disk.
+- 🏠 **Your own server.** Files pass through your backend to your storage. Nothing is written to the server's disk.
 
-Try the live preview at **[9drive.zenhosta.com](https://9drive.zenhosta.com)**.
+## Storage providers
 
-## Screenshots
-
-> The screenshots and trailer use made-up demo accounts and files.
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/all-files.webp" alt="All Files page with folders and a file list" /><br /><sub><b>All Files</b>: folders with custom icons and colours, plus every file across your accounts.</sub></td>
-    <td width="50%"><img src="docs/screenshots/quota.webp" alt="Quota Tracker with total storage and upload routing" /><br /><sub><b>Quota Tracker</b>: combined storage and the upload routing order.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/context-menu.webp" alt="Right-click menu on a file" /><br /><sub><b>Right-click menu</b>: preview, download, rename, move, share, invite.</sub></td>
-    <td><img src="docs/screenshots/public-file.webp" alt="Public shared file viewer" /><br /><sub><b>Public link</b>: anyone with the link can view or download the file.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/all-files-dark.webp" alt="All Files page in dark mode" /><br /><sub><b>Dark mode</b>, one click from the header.</sub></td>
-    <td><img src="docs/screenshots/all-files-grid.webp" alt="All Files page in grid view" /><br /><sub><b>Grid view</b> for browsing visually.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/shared.webp" alt="Shared page with invites" /><br /><sub><b>Shared</b>: what you shared, who accepted, and what was shared with you.</sub></td>
-    <td><img src="docs/screenshots/settings.webp" alt="Settings page with connected storage accounts" /><br /><sub><b>Settings</b>: connect Google Drive or S3 and manage the Google OAuth credentials.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/api.webp" alt="API Management page" /><br /><sub><b>API Keys</b>: create keys and copy ready-made upload examples.</sub></td>
-    <td><img src="docs/screenshots/activity.webp" alt="Activity Log page" /><br /><sub><b>Activity Log</b>: a trail of uploads, shares, and changes.</sub></td>
-  </tr>
-</table>
-
-<p align="center"><img src="docs/screenshots/mobile.webp" alt="Multinary on a phone" width="280" /><br /><sub>It works on phones too, and can be installed as a PWA.</sub></p>
+| Provider | What you connect | Limit used for routing |
+| --- | --- | --- |
+| **Cloudinary** | Cloud name, API key and API secret (one entry per account) | The quota you enter in GB. Empty means unlimited. |
+| **Google Drive** | A Google account through OAuth | The account's real quota, read from Google. |
+| **S3-compatible** | Bucket, region, optional endpoint, access keys. Works with AWS S3, Cloudflare R2, MinIO, Wasabi, Backblaze B2 or any custom endpoint. | The quota you enter in bytes. Empty means unlimited. |
 
 ## Features
 
 **Storage**
-- Google Drive, S3-compatible storage and any number of Cloudinary accounts in one dashboard. S3 works with AWS S3, Cloudflare R2, MinIO, Wasabi, Backblaze B2, or any custom endpoint. Cloudinary files get a direct public URL, and Cloudinary has no byte limit in its API, so enter a quota per account if you want routing to respect one.
 - Combined quota summary plus a per-account Quota Tracker.
 - Upload routing policies: *most available*, *round-robin*, or *priority order*.
-- Google Drive uploads land in a root folder called `9drive`. A manual **Sync Drive** button brings changes you made in Google Drive back into Multinary.
+- Google Drive uploads land in a root folder called `9drive`, and S3 uploads use the prefix `9drive`. A manual **Sync Drive** button brings changes you made in Google Drive back into Multinary. Cloudinary uploads go to the folder you choose when connecting (default `multinary`).
 
 **Files**
-- Upload by streaming, with a progress panel in the bottom-right corner.
+- Upload with a progress panel in the bottom-right corner.
 - Virtual folders, which you can nest, colour, and give icons.
 - Header search with filters for type, account, size, and date.
 - Preview images, videos, PDFs, and Office files. Download, rename, move, delete, recycle bin.
@@ -90,6 +58,7 @@ Try the live preview at **[9drive.zenhosta.com](https://9drive.zenhosta.com)**.
 
 **For developers**
 - An external upload API at `POST /api/v1/uploads` with API keys. Keys are shown once, stored hashed, track when they were last used, and can be revoked.
+- `GET /files/:id/view-url` returns the direct public URL of a Cloudinary file.
 - In-app API docs with cURL and JavaScript examples.
 
 **Accounts and admin**
@@ -106,7 +75,7 @@ Pick the option that suits you. Docker is the easiest.
 You only need Docker. MySQL is included.
 
 ```bash
-git clone https://github.com/zenhosta/9drive.git
+git clone https://github.com/screamolic/9drive.git
 cd 9drive
 cp .env.docker.example .env      # Windows PowerShell: Copy-Item .env.docker.example .env
 # open .env and set JWT_ACCESS_SECRET and TOKEN_ENCRYPTION_KEY to long random strings
@@ -117,7 +86,7 @@ Then open **http://localhost:5173** and create an account. 🎉
 
 What happens behind the scenes:
 - The backend runs the database migrations on every start, so updating an existing install keeps your data.
-- If `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` are real values, the Google config is saved automatically. If they are blank, the app still starts and you can add them later in **Settings → Google Credentials**.
+- Google is optional for Cloudinary. If `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` are real values, the Google config is saved automatically. If they are blank, the app still starts and Cloudinary accounts connect and work normally. You can add Google later in **Settings → Google Credentials**. (Known quirk: connecting an S3 bucket still expects a saved Google config to exist.)
 
 | Service  | URL                     |
 | -------- | ----------------------- |
@@ -153,7 +122,7 @@ bash ./setup.sh
 powershell -ExecutionPolicy Bypass -File .\setup.ps1
 ```
 
-Enter your MySQL URL when asked (default `mysql://root@localhost:3306/9drive`). You can leave the Google credentials empty for now.
+Enter your MySQL URL when asked (default `mysql://root@localhost:3306/9drive`; the database is still called `9drive`). You can leave the Google credentials empty for now.
 
 **2. Create the tables and start both apps** in two terminals:
 
@@ -210,14 +179,35 @@ Then run `npm run prisma:migrate` in `backend/` and start both dev servers as sh
 ### Your first five minutes
 
 1. Open http://localhost:5173 and **register**, or use **Continue with Google** (this connects your first Drive automatically).
-2. Go to **Settings → Connect Drive** to add more Google accounts, or **Connect S3** to add a bucket.
+2. Go to **Settings** and connect storage: **Connect Cloudinary**, **Connect Drive**, or **Connect S3**. Add as many accounts as you want.
 3. Open **Quota Tracker** to see your combined storage and choose an upload routing mode.
 4. Go to **All Files**, create a folder, and upload something. Watch the progress panel in the corner.
 5. Right-click the file and choose **Share Link**, then open the link in a private window.
 
+## Connecting Cloudinary
+
+You can connect any number of Cloudinary accounts. Each one needs three values from its dashboard (*Settings → API Keys*): the **cloud name**, an **API key**, and the **API secret**.
+
+In Multinary, open **Settings → Connect Cloudinary** and fill in:
+
+| Field | Notes |
+| --- | --- |
+| Display name | Any label you like. |
+| Cloud name | Letters, numbers, `-` and `_`. This identifies the account, so it can be connected only once per user. |
+| API key / API secret | Stored encrypted. Multinary checks them against Cloudinary before saving the account. |
+| Folder | Where files go inside that Cloudinary account. Default `multinary`. |
+| Storage quota (GB) | Optional. Leave empty for unlimited. |
+
+Things worth knowing:
+
+- **Cloudinary has no byte limit in its API.** Its plans are credit-based, so Multinary cannot read how much space you may use. Enter a quota if you want routing to stop sending files to an account that is getting full. Used space is the larger of Cloudinary's own usage figure and the total of the files Multinary stored there.
+- **Free plans have limits.** Cloudinary caps the size of each file by type, and may block delivery of PDF, ZIP and other non-media files until you allow it under its security settings. If a download fails with a 401 or 403, check that setting.
+- **Public URLs.** Images, video and audio are served from `res.cloudinary.com`. `GET /files/:id/view-url` (with your login token) returns that direct URL.
+- Files are held in memory while uploading, so very large files are limited by your server's RAM and by your Cloudinary plan.
+
 ## Connecting Google Drive
 
-Google sign-in and Drive access need a free OAuth client from **Google Cloud Console** (not Google Search Console). It takes about 10 minutes, once.
+Google sign-in and Drive access need a free OAuth client from **Google Cloud Console** (not Google Search Console). It takes about 10 minutes, once. Skip this section if you only use Cloudinary.
 
 <details>
 <summary><b>Step-by-step Google Cloud setup</b></summary>
@@ -257,7 +247,7 @@ Either way, the credentials are encrypted and stored in MySQL as one global conf
 | `APP_PORT` | Backend port (default `4000`). |
 | `FRONTEND_URL` | The frontend's URL. CORS only allows this origin. |
 | `JWT_ACCESS_SECRET` | Secret for signing access tokens. At least 32 characters, random. |
-| `TOKEN_ENCRYPTION_KEY` | Key for encrypting Google tokens and S3 credentials. At least 32 characters, random. |
+| `TOKEN_ENCRYPTION_KEY` | Key for encrypting Google tokens and S3 and Cloudinary credentials. At least 32 characters, random. If you lose or change it, stored credentials can no longer be read. |
 | `ACCESS_TOKEN_TTL_SECONDS` | Access token lifetime (default `900`). |
 | `REFRESH_TOKEN_TTL_DAYS` | Refresh token lifetime (default `30`). |
 | `MAX_UPLOAD_BYTES` | Largest allowed upload (default 5 GB). |
@@ -291,24 +281,24 @@ Captcha only turns on when **both** `VITE_RECAPTCHA_SITE_KEY` and `RECAPTCHA_SEC
    ```
 2. **Clone and configure:**
    ```bash
-   git clone https://github.com/zenhosta/9drive.git
+   git clone https://github.com/screamolic/9drive.git
    cd 9drive
    cp .env.docker.example .env
    nano .env
    ```
-   - `FRONTEND_URL`: your public frontend URL, e.g. `https://9drive.yourdomain.com`
-   - `VITE_API_URL`: your public backend URL, e.g. `https://api.9drive.yourdomain.com`
-   - `GOOGLE_REDIRECT_URI`: e.g. `https://api.9drive.yourdomain.com/connected-accounts/google/callback`
+   - `FRONTEND_URL`: your public frontend URL, e.g. `https://multinary.yourdomain.com`
+   - `VITE_API_URL`: your public backend URL, e.g. `https://api.multinary.yourdomain.com`
    - Strong random values for `JWT_ACCESS_SECRET` and `TOKEN_ENCRYPTION_KEY`
-   - Your `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
+   - Only if you use Google Drive or S3: `GOOGLE_REDIRECT_URI` (e.g. `https://api.multinary.yourdomain.com/connected-accounts/google/callback`), `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
 3. **Start it:** `docker compose up -d --build`
-4. **Update Google Cloud Console:** add your frontend URL under *Authorized JavaScript origins* and your redirect URI under *Authorized redirect URIs*.
+4. **If you use Google Drive, update Google Cloud Console:** add your frontend URL under *Authorized JavaScript origins* and your redirect URI under *Authorized redirect URIs*.
 
 Production tips:
 - Put the frontend and backend behind an HTTPS reverse proxy.
 - Don't expose the MySQL port to the internet.
 - Rebuild the frontend whenever `VITE_API_URL` or `VITE_RECAPTCHA_SITE_KEY` changes.
-- Publish the OAuth consent screen when you're ready. Google may ask to verify public apps.
+- Back up `TOKEN_ENCRYPTION_KEY` somewhere safe.
+- If you use Google, publish the OAuth consent screen when you're ready. Google may ask to verify public apps.
 
 </details>
 
@@ -345,11 +335,13 @@ cd ../frontend && npm install && npm run build
 pm2 restart 9drive-backend
 ```
 
+The update pulls whatever is on `main`, so make sure the migration for a new feature has been checked before you press it.
+
 </details>
 
 ## Upload API
 
-Create a key under **API Keys** in the app, then send files as `multipart/form-data`. Each upload is routed using the same rules as the dashboard.
+Create a key under **API Keys** in the app, then send files as `multipart/form-data`. Each upload is routed using the same rules as the dashboard, so it can land on any connected Cloudinary, Google Drive or S3 account. Keys start with `9d_live_`.
 
 ```bash
 curl -X POST "http://localhost:4000/api/v1/uploads" \
@@ -374,6 +366,7 @@ Auth          POST /auth/register · POST /auth/login · POST /auth/refresh · P
 Accounts      GET  /connected-accounts · DELETE /connected-accounts/:id · POST /connected-accounts/:id/sync-quota
               GET  /connected-accounts/google/connect-url · GET /connected-accounts/google/callback
               POST /connected-accounts/s3
+              POST /connected-accounts/cloudinary
 
 Storage       GET  /storage/summary · GET /storage/breakdown
               GET  /storage/routing-policy · PATCH /storage/routing-policy
@@ -391,6 +384,7 @@ Files         GET  /files · /files?folderId=<id> · /files?q=<search> · GET /f
 
 Uploads       POST /uploads
               POST /uploads/resumable/init · PUT /uploads/resumable/chunk/:id · GET /uploads/resumable/status/:id
+              (resumable uploads are for Google Drive accounts only)
 
 Invites       GET /invites · POST /invites · DELETE /invites/:id
 API keys      GET /api-keys · POST /api-keys · DELETE /api-keys/:id
@@ -402,6 +396,27 @@ External API  POST /api/v1/uploads   (API key with the files:upload scope)
 </details>
 
 ## Troubleshooting
+
+<details>
+<summary><b>"Cloudinary rejected the credentials or cloud name"</b></summary>
+
+The cloud name, API key or API secret is wrong. Copy them again from the Cloudinary dashboard (*Settings → API Keys*). The cloud name is not the account email or the display name.
+
+</details>
+
+<details>
+<summary><b>Downloading a Cloudinary PDF or ZIP fails with 401 or 403</b></summary>
+
+Cloudinary can block delivery of PDF, ZIP and other non-media files on some accounts. Allow it in the account's security settings. Images, video and audio are not affected.
+
+</details>
+
+<details>
+<summary><b>A Cloudinary upload fails with a file size error</b></summary>
+
+Cloudinary limits the size of each file by type, and free plans have the lowest limits. Use another account, or upgrade the plan.
+
+</details>
 
 <details>
 <summary><b>"Google Drive API has not been used in project … or it is disabled"</b></summary>
@@ -433,26 +448,25 @@ Vite bakes `VITE_API_URL` into the build. Rebuild the frontend, or with Docker r
 
 ## Security
 
-- Uploads stream through the backend straight to Google Drive or S3. **Nothing is stored on the server's disk.**
-- Google tokens and S3 credentials are encrypted in MySQL. App refresh tokens, API keys, preview tokens, and auth-handoff tokens are stored only as hashes.
+- Uploads pass through the backend straight to Cloudinary, Google Drive or S3. **Nothing is stored on the server's disk.**
+- Google tokens and S3 and Cloudinary credentials are encrypted in MySQL. App refresh tokens, API keys, preview tokens, and auth-handoff tokens are stored only as hashes.
 - CORS only allows `FRONTEND_URL`.
-- Never commit `.env` files or share `TOKEN_ENCRYPTION_KEY`, `JWT_ACCESS_SECRET`, `RECAPTCHA_SECRET_KEY`, OAuth client secrets, or raw share links you want to keep private.
+- Cloudinary files are served from public URLs. Anyone who has the URL can open the file, so don't upload anything private to a Cloudinary account you connect.
+- Never commit `.env` files or share `TOKEN_ENCRYPTION_KEY`, `JWT_ACCESS_SECRET`, `RECAPTCHA_SECRET_KEY`, OAuth client secrets, Cloudinary API secrets, or raw share links you want to keep private.
 
 ## Project structure
 
 ```txt
-backend/    Express 5 + TypeScript API, Prisma (MySQL), Google Drive and S3 integrations
+backend/    Express 5 + TypeScript API, Prisma (MySQL), Cloudinary, Google Drive and S3 integrations
 frontend/   React 19 + Vite + Tailwind CSS 4 app (installable PWA)
-docs/       README screenshots and trailer
+docs/       Progress and plan (MULTINARY_PROGRESS.md)
 ```
 
 Build checks: `cd backend && npm run build` and `cd frontend && npm run build`.
 
-## Star history
+## Credits and license
 
-[![Star History Chart](https://star-history.dera.page/svg?repos=zenhosta/9drive&type=Date)](https://star-history.dera.page/#zenhosta/9drive&type=Date)
-
-## License
+Multinary is based on [9Drive](https://github.com/zenhosta/9drive) by Zenhosta.
 
 Copyright 2026 Zenhosta
 
