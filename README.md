@@ -59,6 +59,7 @@ Multinary joins them. Connect as many accounts as you like and you get:
 **For developers**
 - An external upload API at `POST /api/v1/uploads` with API keys. Keys are shown once, stored hashed, track when they were last used, and can be revoked.
 - `GET /files/:id/view-url` returns the direct public URL of a Cloudinary file.
+- A files and **content queue** API for automation (for example a social media scheduler): list files with their public URL, queue them with a target and schedule, let a worker claim the next item, and report posted or failed. See [Files and queue API](#files-and-queue-api).
 - In-app API docs with cURL and JavaScript examples.
 
 **Accounts and admin**
@@ -352,6 +353,44 @@ curl -X POST "http://localhost:4000/api/v1/uploads" \
 
 `filesMeta` must come **before** the files. It's a JSON array of `{ fieldName, fileName, mimeType, sizeBytes, folderId? }`, and each `fieldName` matches a file field (`file-0`, `file-1`, …).
 
+## Files and queue API
+
+For automation that needs a stream of media to publish elsewhere. Create an API key with the scopes you need (**API Keys** page): `files:read`, `queue:read`, `queue:write` (and `files:upload` for uploads). A worker normally needs `files:read`, `queue:read` and `queue:write`.
+
+Only files stored on **Cloudinary** have a public media URL, so only those can be queued. Everything is under `/api/v1` with `Authorization: Bearer 9d_live_xxx`.
+
+```txt
+GET    /api/v1/files?q=&type=image|video|audio&limit=&offset=   files:read
+GET    /api/v1/files/:id                                        files:read
+POST   /api/v1/queue            { fileId, target?, caption?, scheduledAt? }   queue:write
+GET    /api/v1/queue?status=&target=&limit=&offset=             queue:read
+POST   /api/v1/queue/claim      { target? }                     queue:write
+GET    /api/v1/queue/:id                                        queue:read
+PATCH  /api/v1/queue/:id        { status?, externalId?, error?, target?, caption?, scheduledAt? }   queue:write
+DELETE /api/v1/queue/:id                                        queue:write
+```
+
+**How an item moves:** `pending` → `processing` (when a worker claims it) → `posted` or `failed`. Send `PATCH` with `status: "pending"` to retry. An item that stays in `processing` for 15 minutes (a crashed worker) is handed out again. Items with a future `scheduledAt` are skipped until they are due. `target` is a free label you choose, for example the social account an item belongs to, so each worker can claim only its own items.
+
+```bash
+# add a file to the queue
+curl -X POST "http://localhost:4000/api/v1/queue" \
+  -H "Authorization: Bearer 9d_live_xxx" -H "Content-Type: application/json" \
+  -d '{"fileId":"<file id>","target":"account-1","caption":"Hello"}'
+
+# a worker takes the next due item ({"item": null} when the queue is empty)
+curl -X POST "http://localhost:4000/api/v1/queue/claim" \
+  -H "Authorization: Bearer 9d_live_xxx" -H "Content-Type: application/json" \
+  -d '{"target":"account-1"}'
+
+# report the result
+curl -X PATCH "http://localhost:4000/api/v1/queue/<item id>" \
+  -H "Authorization: Bearer 9d_live_xxx" -H "Content-Type: application/json" \
+  -d '{"status":"posted","externalId":"<post id>"}'
+```
+
+The claimed item includes `file.mediaUrl`, the direct `res.cloudinary.com` URL to hand to the service that publishes it.
+
 <details>
 <summary><b>Full REST API overview</b></summary>
 
@@ -391,6 +430,8 @@ API keys      GET /api-keys · POST /api-keys · DELETE /api-keys/:id
 Activity      GET /audit-logs
 Public files  GET /public/files/:token · GET /public/files/:token/download · GET /public/files/:token/preview
 External API  POST /api/v1/uploads   (API key with the files:upload scope)
+              GET /api/v1/files · GET /api/v1/files/:id   (files:read)
+              POST/GET /api/v1/queue · POST /api/v1/queue/claim · GET/PATCH/DELETE /api/v1/queue/:id   (queue:read / queue:write)
 ```
 
 </details>

@@ -22,6 +22,7 @@ model User {
   connectedAccounts ConnectedAccount[]
   s3StorageConfigs S3StorageConfig[]
   cloudinaryConfigs CloudinaryConfig[]
+  queueItems        QueueItem[]
   files          File[]
   fileShares     FileShare[]
   filePreviewTokens FilePreviewToken[]
@@ -246,6 +247,7 @@ model File {
   folder             Folder?          @relation(fields: [folderId], references: [id], onDelete: SetNull)
   shares             FileShare[]
   previewTokens      FilePreviewToken[]
+  queueItems         QueueItem[]
 
   @@index([userId])
   @@index([userId, status, createdAt])
@@ -254,6 +256,30 @@ model File {
   @@index([folderId])
   @@index([providerFileId])
   @@map("files")
+}
+
+model QueueItem {
+  id          String    @id @default(uuid()) @db.Char(36)
+  userId      String    @map("user_id") @db.Char(36)
+  fileId      String    @map("file_id") @db.Char(36)
+  target      String?   @db.VarChar(191)
+  caption     String?   @db.Text
+  status      String    @default("pending") @db.VarChar(32)
+  scheduledAt DateTime? @map("scheduled_at")
+  claimedAt   DateTime? @map("claimed_at")
+  postedAt    DateTime? @map("posted_at")
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error") @db.Text
+  externalId  String?   @map("external_id") @db.VarChar(191)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  file        File      @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, createdAt])
+  @@index([userId, target, status])
+  @@index([fileId])
+  @@map("queue_items")
 }
 
 model FileShare {

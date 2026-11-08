@@ -35,6 +35,13 @@ Other scripts that `AGENTS.md` doesn't list:
 - Files stream from `res.cloudinary.com` (public `upload` type). `GET /files/:id/view-url` returns that direct URL. Free plans cap per-file size (see `media_limits` in the Usage API) and may block PDF/ZIP/raw delivery until enabled in the Cloudinary security settings.
 - Connect with `POST /connected-accounts/cloudinary`; it validates the credentials against the Usage API before keeping the account.
 
+**Content queue and files API (API-key driven).** For external automation such as a social media scheduler. Routes live under `/api/v1` and are mounted by `modules/public-api/public-api.routes.ts`:
+- `files/` (`public-files.routes.ts`, scope `files:read`): list/get active files with `mediaUrl` (Cloudinary files only; `null` for Drive/S3). Shared serializer in `public-api/media.ts`.
+- `queue/` (`modules/queue/queue.routes.ts`, scopes `queue:read` / `queue:write`): `QueueItem` rows (file, optional `target` label, `caption`, `scheduledAt`, `status`, `attempts`, `lastError`, `externalId`). Lifecycle `pending` -> `processing` -> `posted` | `failed`; `PATCH` with `status: "pending"` re-queues. Only Cloudinary files can be queued (422 `FILE_NOT_PUBLIC` otherwise).
+- `POST /queue/claim` picks the oldest due item whose file is still active, using an optimistic lock (`updateMany` on `id` + `status` + `updatedAt`) so concurrent workers never get the same item. Items stuck in `processing` for 15 minutes are handed out again.
+- API key scopes are `files:upload`, `files:read`, `queue:read`, `queue:write`, chosen at creation (`POST /api-keys`, default upload only). Keys created before the queue existed keep upload only.
+- The queue is API-only for now: there is no dashboard page for it yet.
+
 **Upload routing** (`modules/uploads/upload.routes.ts`, `selectAccount`):
 1. Re-sync quota for any account whose last sync is more than 5 minutes old.
 2. Subtract bytes already reserved by earlier files in the same multipart request.

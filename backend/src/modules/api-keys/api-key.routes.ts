@@ -7,8 +7,13 @@ import { hashToken, randomToken } from '../../utils/crypto.js'
 export const apiKeyRouter = Router()
 apiKeyRouter.use(requireAuth)
 
-const createSchema = z.object({ name: z.string().trim().min(1).max(191), expiresAt: z.string().datetime().nullable().optional() })
-const scopes = ['files:upload']
+export const apiKeyScopes = ['files:upload', 'files:read', 'queue:read', 'queue:write'] as const
+const createSchema = z.object({
+  name: z.string().trim().min(1).max(191),
+  expiresAt: z.string().datetime().nullable().optional(),
+  // Omitted = upload only, which is what keys created before the queue API had.
+  scopes: z.array(z.enum(apiKeyScopes)).min(1).optional(),
+})
 
 function serializeApiKey(apiKey: { id: string; name: string; keyPrefix: string; scopes: unknown; status: string; lastUsedAt: Date | null; expiresAt: Date | null; revokedAt: Date | null; createdAt: Date }) {
   return {
@@ -36,6 +41,7 @@ apiKeyRouter.get('/', async (req: AuthRequest, res, next) => {
 apiKeyRouter.post('/', async (req: AuthRequest, res, next) => {
   try {
     const body = createSchema.parse(req.body)
+    const scopes = [...new Set(body.scopes ?? ['files:upload'])]
     const secret = `9d_live_${randomToken(32)}`
     const apiKey = await prisma.apiKey.create({
       data: {
