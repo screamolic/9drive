@@ -178,6 +178,7 @@ model S3StorageConfig {
   accessKeyIdEncrypted     String           @map("access_key_id_encrypted") @db.Text
   secretAccessKeyEncrypted String           @map("secret_access_key_encrypted") @db.Text
   forcePathStyle           Boolean          @default(false) @map("force_path_style")
+  publicBaseUrl            String?          @map("public_base_url") @db.Text
   prefix                   String           @default("9drive") @db.VarChar(191)
   quotaBytes               BigInt?          @map("quota_bytes")
   status                   String           @default("active") @db.VarChar(32)

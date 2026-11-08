@@ -33,7 +33,7 @@ export function SettingsPage() {
   const [connecting, setConnecting] = useState(false)
   const [s3Open, setS3Open] = useState(false)
   const [connectingS3, setConnectingS3] = useState(false)
-  const [s3Form, setS3Form] = useState({ name: '', bucket: '', region: 'us-east-1', endpoint: '', accessKeyId: '', secretAccessKey: '', forcePathStyle: false, quotaBytes: '' })
+  const [s3Form, setS3Form] = useState({ name: '', bucket: '', region: 'us-east-1', endpoint: '', publicBaseUrl: '', accessKeyId: '', secretAccessKey: '', forcePathStyle: false, quotaBytes: '' })
   const [cloudinaryOpen, setCloudinaryOpen] = useState(false)
   const [connectingCloudinary, setConnectingCloudinary] = useState(false)
   const [cloudinaryForm, setCloudinaryForm] = useState({ name: '', cloudName: '', apiKey: '', apiSecret: '', folder: 'multinary', quotaGb: '' })
@@ -342,9 +342,9 @@ export function SettingsPage() {
     setConnectingS3(true)
     setMessage('')
     try {
-      await apiFetch('/connected-accounts/s3', { method: 'POST', body: JSON.stringify({ ...s3Form, endpoint: s3Form.endpoint || undefined, quotaBytes: s3Form.quotaBytes || null }) })
+      await apiFetch('/connected-accounts/s3', { method: 'POST', body: JSON.stringify({ ...s3Form, endpoint: s3Form.endpoint || undefined, publicBaseUrl: s3Form.publicBaseUrl || undefined, quotaBytes: s3Form.quotaBytes || null }) })
       setS3Open(false)
-      setS3Form({ name: '', bucket: '', region: 'us-east-1', endpoint: '', accessKeyId: '', secretAccessKey: '', forcePathStyle: false, quotaBytes: '' })
+      setS3Form({ name: '', bucket: '', region: 'us-east-1', endpoint: '', publicBaseUrl: '', accessKeyId: '', secretAccessKey: '', forcePathStyle: false, quotaBytes: '' })
       setMessage('S3 storage connected.')
       await load()
       window.dispatchEvent(new Event('9drive:storage-changed'))
@@ -650,6 +650,7 @@ export function SettingsPage() {
           <input className="h-11 rounded-xl border border-slate-200 px-3 text-sm" placeholder="Bucket" value={s3Form.bucket} onChange={(event) => setS3Form({ ...s3Form, bucket: event.target.value })} required />
           <input className="h-11 rounded-xl border border-slate-200 px-3 text-sm" placeholder="Region" value={s3Form.region} onChange={(event) => setS3Form({ ...s3Form, region: event.target.value })} required />
           <input className="h-11 rounded-xl border border-slate-200 px-3 text-sm" placeholder="Endpoint URL (optional)" value={s3Form.endpoint} onChange={(event) => setS3Form({ ...s3Form, endpoint: event.target.value })} />
+          <input className="h-11 rounded-xl border border-slate-200 px-3 text-sm" placeholder="Public URL (optional, e.g. https://pub-xxx.r2.dev or your CDN domain)" value={s3Form.publicBaseUrl} onChange={(event) => setS3Form({ ...s3Form, publicBaseUrl: event.target.value })} />
           <input className="h-11 rounded-xl border border-slate-200 px-3 text-sm" placeholder="Access key ID" value={s3Form.accessKeyId} onChange={(event) => setS3Form({ ...s3Form, accessKeyId: event.target.value })} required />
           <input className="h-11 rounded-xl border border-slate-200 px-3 text-sm" placeholder="Secret access key" type="password" value={s3Form.secretAccessKey} onChange={(event) => setS3Form({ ...s3Form, secretAccessKey: event.target.value })} required />
           <input className="h-11 rounded-xl border border-slate-200 px-3 text-sm" placeholder="Quota bytes (optional)" inputMode="numeric" value={s3Form.quotaBytes} onChange={(event) => setS3Form({ ...s3Form, quotaBytes: event.target.value })} />

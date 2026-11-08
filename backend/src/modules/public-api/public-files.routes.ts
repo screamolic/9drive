@@ -13,7 +13,7 @@ const listSchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 })
 
-// GET /api/v1/files : active files with their public media URL (Cloudinary files only).
+// GET /api/v1/files : active files with their public media URL (Cloudinary and S3 files; Google Drive files have none).
 publicFilesRouter.get('/', requireApiKey('files:read'), async (req: ApiKeyRequest, res, next) => {
   try {
     const query = listSchema.parse(req.query)

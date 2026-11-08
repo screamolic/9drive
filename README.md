@@ -36,7 +36,7 @@ Multinary joins them. Connect as many accounts as you like and you get:
 | --- | --- | --- |
 | **Cloudinary** | Cloud name, API key and API secret (one entry per account) | The quota you enter in GB. Empty means unlimited. |
 | **Google Drive** | A Google account through OAuth | The account's real quota, read from Google. |
-| **S3-compatible** | Bucket, region, optional endpoint, access keys. Works with AWS S3, Cloudflare R2, MinIO, Wasabi, Backblaze B2 or any custom endpoint. | The quota you enter in bytes. Empty means unlimited. |
+| **S3-compatible** | Bucket, region, optional endpoint, optional public URL, access keys. Works with AWS S3, Cloudflare R2, MinIO, Wasabi, Backblaze B2 or any custom endpoint. | The quota you enter in bytes. Empty means unlimited. |
 
 ## Features
 
@@ -58,7 +58,7 @@ Multinary joins them. Connect as many accounts as you like and you get:
 
 **For developers**
 - An external upload API at `POST /api/v1/uploads` with API keys. Keys are shown once, stored hashed, track when they were last used, and can be revoked.
-- `GET /files/:id/view-url` returns the direct public URL of a Cloudinary file.
+- `GET /files/:id/view-url` returns the direct public URL of a Cloudinary file. For automation, `GET /api/v1/files` returns a `mediaUrl` for Cloudinary and S3 files.
 - A files and **content queue** API for automation (for example a social media scheduler): list files with their public URL, queue them with a target and schedule, let a worker claim the next item, and report posted or failed. See [Files and queue API](#files-and-queue-api).
 - In-app API docs with cURL and JavaScript examples.
 
@@ -357,7 +357,13 @@ curl -X POST "http://localhost:4000/api/v1/uploads" \
 
 For automation that needs a stream of media to publish elsewhere. Create an API key with the scopes you need (**API Keys** page): `files:read`, `queue:read`, `queue:write` (and `files:upload` for uploads). A worker normally needs `files:read`, `queue:read` and `queue:write`.
 
-Only files stored on **Cloudinary** have a public media URL, so only those can be queued. Everything is under `/api/v1` with `Authorization: Bearer 9d_live_xxx`.
+Files on **Cloudinary** and **S3** have a public media URL and can be queued. **Google Drive files cannot**, because Drive has no public file URL. Everything is under `/api/v1` with `Authorization: Bearer 9d_live_xxx`.
+
+For S3, Multinary builds the URL from your settings, so the file must really be readable by the public:
+- Set **Public URL** when you connect the bucket if you have a public domain, a CDN, or a Cloudflare R2 public bucket URL (`https://pub-xxx.r2.dev`). The file URL is then `<public URL>/<object key>`.
+- Without it, AWS S3 uses `https://<bucket>.s3.<region>.amazonaws.com/<key>`, and other S3-compatible services use `<endpoint>/<bucket>/<key>`. This only works if the bucket policy allows public reads.
+- The S3 API endpoint of **Cloudflare R2 is never public**, so R2 always needs the Public URL.
+- Check a URL before you rely on it: `curl -I "<mediaUrl>"` must return `200`.
 
 ```txt
 GET    /api/v1/files?q=&type=image|video|audio&limit=&offset=   files:read

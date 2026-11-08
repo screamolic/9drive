@@ -24,7 +24,7 @@ Other scripts that `AGENTS.md` doesn't list:
 
 ## Architecture beyond AGENTS.md
 
-**Three storage providers.** `ConnectedAccount.provider` is `google_drive`, `s3` or `cloudinary`. An S3-compatible account is a `ConnectedAccount` plus an `S3StorageConfig` row (encrypted keys, bucket, optional endpoint, `prefix` defaulting to `9drive`, optional `quotaBytes`). Code that touches a stored file has to branch on provider:
+**Three storage providers.** `ConnectedAccount.provider` is `google_drive`, `s3` or `cloudinary`. An S3-compatible account is a `ConnectedAccount` plus an `S3StorageConfig` row (encrypted keys, bucket, optional endpoint, `prefix` defaulting to `9drive`, optional `quotaBytes`). `S3StorageConfig.publicBaseUrl` (optional) is the public base URL used for `mediaUrl`. Code that touches a stored file has to branch on provider:
 - Streaming: `modules/files/stream-file.ts` (`streamProviderFile`) sends work to `stream-google-file.ts` or `s3/s3.service.ts`.
 - Quota: `syncGoogleQuota` (google.service) vs `syncS3Quota` (s3.service). Both write to `StorageAccount`.
 - Upload: `ensureGoogleAppFolder` + Drive resumable upload vs `buildS3ObjectKey` + `uploadS3Object` (`@aws-sdk/lib-storage`).
@@ -36,8 +36,8 @@ Other scripts that `AGENTS.md` doesn't list:
 - Connect with `POST /connected-accounts/cloudinary`; it validates the credentials against the Usage API before keeping the account.
 
 **Content queue and files API (API-key driven).** For external automation such as a social media scheduler. Routes live under `/api/v1` and are mounted by `modules/public-api/public-api.routes.ts`:
-- `files/` (`public-files.routes.ts`, scope `files:read`): list/get active files with `mediaUrl` (Cloudinary files only; `null` for Drive/S3). Shared serializer in `public-api/media.ts`.
-- `queue/` (`modules/queue/queue.routes.ts`, scopes `queue:read` / `queue:write`): `QueueItem` rows (file, optional `target` label, `caption`, `scheduledAt`, `status`, `attempts`, `lastError`, `externalId`). Lifecycle `pending` -> `processing` -> `posted` | `failed`; `PATCH` with `status: "pending"` re-queues. Only Cloudinary files can be queued (422 `FILE_NOT_PUBLIC` otherwise).
+- `files/` (`public-files.routes.ts`, scope `files:read`): list/get active files with `mediaUrl`: Cloudinary delivery URL, or for S3 a URL built by `s3/s3.utils.ts` (`buildS3PublicUrl`: `publicBaseUrl` if set, else AWS virtual-hosted style, else `<endpoint>/<bucket>/<key>` path style); `null` for Google Drive, which has no public URL. Shared serializer in `public-api/media.ts`. The S3 URL is only fetchable if the bucket/object allows public reads (or `publicBaseUrl` points at a public domain); Cloudflare R2's S3 endpoint is never public, so R2 needs `publicBaseUrl`.
+- `queue/` (`modules/queue/queue.routes.ts`, scopes `queue:read` / `queue:write`): `QueueItem` rows (file, optional `target` label, `caption`, `scheduledAt`, `status`, `attempts`, `lastError`, `externalId`). Lifecycle `pending` -> `processing` -> `posted` | `failed`; `PATCH` with `status: "pending"` re-queues. Cloudinary and S3 files can be queued; Google Drive files cannot (422 `FILE_NOT_PUBLIC`).
 - `POST /queue/claim` picks the oldest due item whose file is still active, using an optimistic lock (`updateMany` on `id` + `status` + `updatedAt`) so concurrent workers never get the same item. Items stuck in `processing` for 15 minutes are handed out again.
 - API key scopes are `files:upload`, `files:read`, `queue:read`, `queue:write`, chosen at creation (`POST /api-keys`, default upload only). Keys created before the queue existed keep upload only.
 - The queue is API-only for now: there is no dashboard page for it yet.

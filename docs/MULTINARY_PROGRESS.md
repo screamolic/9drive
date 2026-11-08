@@ -25,7 +25,7 @@ Turn this fork of 9Drive into **Multinary**: one dashboard and API that pools ma
    - Prisma model `QueueItem` and migration `20261109060000_content_queue`.
    - `modules/queue/queue.routes.ts` (create, list, claim, get, update, delete), `modules/public-api/public-files.routes.ts` and `media.ts`.
    - API key scopes `files:read`, `queue:read`, `queue:write` (API Keys page now has a scope picker and docs for these endpoints).
-   - Design choices: only Cloudinary files can be queued (they alone have a stable public URL); `target` is a free label (for example one social account per worker); claiming uses an optimistic lock so concurrent workers never get the same item; stuck `processing` items are re-offered after 15 minutes.
+   - Design choices: Cloudinary and S3 files can be queued, Google Drive files cannot (Drive has no public file URL). The S3 `mediaUrl` is built from the config (new optional `S3StorageConfig.publicBaseUrl`, migration `20261109070000_s3_public_base_url`) and only works if the bucket allows public reads, so R2 needs `publicBaseUrl`; `target` is a free label (for example one social account per worker); claiming uses an optimistic lock so concurrent workers never get the same item; stuck `processing` items are re-offered after 15 minutes.
    - **Not built:** a dashboard page for the queue (API only), and the worker that actually posts to a social media service. Those belong to the consumer (for example the Hermes Agent harness) or a later task.
 
 ### Verified
@@ -42,6 +42,7 @@ The authoring sandbox could not download Prisma engines, so these never ran:
 - [ ] `cd backend && npm run build` (type-check). Errors seen before generating the client were all cascades from missing Prisma types, none in the new code, but this needs a clean confirmation.
 - [ ] `npx prisma migrate deploy` against a real MySQL; confirm table `cloudinary_configs` exists.
 - [ ] Against a real Cloudinary account (free is fine): connect the account, upload an image, a video and a PDF, open the public URL from `view-url`, download via the app, zip-download, move to Trash, permanently delete (asset must disappear in Cloudinary), and check that quota and "used" update.
+- [ ] S3 public URL against a real bucket: connect one with and without `publicBaseUrl`, upload an image, take `mediaUrl` from `GET /api/v1/files` and run `curl -I` on it (must be 200). Confirm the URL shape for each service the owner uses (AWS, R2, MinIO, Wasabi, B2). The URL builder itself is unit-checked, but nothing proves a given bucket is public.
 - [ ] Queue API against a real DB: create a key with the three queue scopes, `POST /queue` with a Cloudinary file id, `POST /queue/claim` twice in parallel (only one call may get the item), `PATCH` it to `posted` and to `failed`, `PATCH` to `pending` to retry, and check a future `scheduledAt` is skipped. Also check 422 `FILE_NOT_PUBLIC` for a Drive/S3 file and that a key without the scope gets 403.
 - [ ] Backend type-check cannot see `prisma.queueItem` until the Prisma client is generated, so TypeScript has not really checked the queue and files routes yet. Run `npm run build` after `prisma generate`.
 - [ ] Connect two accounts and confirm routing (most available, round robin, priority) alternates between them.

@@ -74,7 +74,7 @@ queueRouter.post('/', requireApiKey('queue:write'), async (req: ApiKeyRequest, r
     const body = createSchema.parse(req.body)
     const file = await prisma.file.findFirst({ where: { id: body.fileId, userId: req.user!.id, status: 'active', deletedAt: null }, include: fileWithMediaInclude })
     if (!file) return res.status(404).json({ code: 'FILE_NOT_FOUND', message: 'File not found.' })
-    if (!fileMediaUrl(file)) return res.status(422).json({ code: 'FILE_NOT_PUBLIC', message: 'Only files stored on Cloudinary have a public media URL and can be queued.' })
+    if (!fileMediaUrl(file)) return res.status(422).json({ code: 'FILE_NOT_PUBLIC', message: 'This file has no public media URL. Only files stored on Cloudinary or S3 can be queued; Google Drive files cannot.' })
     const item = await prisma.queueItem.create({
       data: {
         userId: req.user!.id,

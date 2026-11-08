@@ -119,7 +119,7 @@ export function ApiManagementPage() {
         </Card>
 
         <Card className="min-w-0 p-4 sm:p-5">
-          <div><h2 className="text-lg font-extrabold">Files and Queue API Docs</h2><p className="mt-1 text-sm text-slate-500">For automation such as a social media scheduler. Only files stored on Cloudinary have a public media URL and can be queued. Items go pending, processing, then posted or failed. An item left in processing for 15 minutes is handed out again.</p></div>
+          <div><h2 className="text-lg font-extrabold">Files and Queue API Docs</h2><p className="mt-1 text-sm text-slate-500">For automation such as a social media scheduler. Files on Cloudinary and S3 have a public media URL (S3 needs a bucket or public URL that allows public reads) and can be queued. Google Drive files cannot. Items go pending, processing, then posted or failed. An item left in processing for 15 minutes is handed out again.</p></div>
           <div className="mt-4 grid gap-4 text-sm text-slate-600">
             <div className="min-w-0"><p className="font-bold text-slate-950">Endpoints</p><pre className="mt-2 max-w-full overflow-auto rounded-xl bg-slate-100 p-3 text-xs leading-relaxed text-slate-950 sm:text-sm">{`GET    /api/v1/files?q=&type=image|video|audio&limit=&offset=   (files:read)
 GET    /api/v1/files/:id                                        (files:read)
