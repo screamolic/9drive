@@ -26,6 +26,14 @@ function availableLabel(account: ConnectedAccount) {
   return formatBytes(account.storageAccount?.availableBytes)
 }
 
+type FileSyncResult = { created: number; updated: number; deleted: number; skipped: number; warning?: string }
+
+function describeFileSync(result: FileSyncResult) {
+  const parts = [`${result.created} new`, `${result.updated} updated`, `${result.deleted} removed`]
+  if (result.skipped > 0) parts.push(`${result.skipped} skipped (name too long)`)
+  return `Sync finished: ${parts.join(', ')}.${result.warning ? ` ${result.warning}` : ''}`
+}
+
 export function SettingsPage() {
   const user = getStoredUser()
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
@@ -311,10 +319,20 @@ export function SettingsPage() {
 
   async function sync(accountId: string) {
     setSyncingAccountId(accountId)
+    setMessage('')
     try {
-      await apiFetch(`/connected-accounts/${accountId}/sync-quota`, { method: 'POST' })
+      const provider = accounts.find((account) => account.id === accountId)?.provider
+      if (provider === 's3' || provider === 'cloudinary') {
+        // Cloudinary/S3: also registers files that already exist in the account, then refreshes quota.
+        const data = await apiFetch<{ result: FileSyncResult }>(`/connected-accounts/${accountId}/sync-files`, { method: 'POST' })
+        setMessage(describeFileSync(data.result))
+      } else {
+        await apiFetch(`/connected-accounts/${accountId}/sync-quota`, { method: 'POST' })
+      }
       await load()
       window.dispatchEvent(new Event('9drive:storage-changed'))
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Sync failed')
     } finally {
       setSyncingAccountId(null)
     }
@@ -345,7 +363,7 @@ export function SettingsPage() {
       await apiFetch('/connected-accounts/s3', { method: 'POST', body: JSON.stringify({ ...s3Form, endpoint: s3Form.endpoint || undefined, publicBaseUrl: s3Form.publicBaseUrl || undefined, quotaBytes: s3Form.quotaBytes || null }) })
       setS3Open(false)
       setS3Form({ name: '', bucket: '', region: 'us-east-1', endpoint: '', publicBaseUrl: '', accessKeyId: '', secretAccessKey: '', forcePathStyle: false, quotaBytes: '' })
-      setMessage('S3 storage connected.')
+      setMessage('S3 storage connected. Existing files are being imported in the background; run Sync in a moment to refresh.')
       await load()
       window.dispatchEvent(new Event('9drive:storage-changed'))
     } catch (error) {
@@ -366,7 +384,7 @@ export function SettingsPage() {
       await apiFetch('/connected-accounts/cloudinary', { method: 'POST', body: JSON.stringify({ ...rest, quotaBytes }) })
       setCloudinaryOpen(false)
       setCloudinaryForm({ name: '', cloudName: '', apiKey: '', apiSecret: '', folder: 'multinary', quotaGb: '' })
-      setMessage('Cloudinary account connected.')
+      setMessage('Cloudinary account connected. Existing files are being imported in the background; run Sync in a moment to refresh.')
       await load()
       window.dispatchEvent(new Event('9drive:storage-changed'))
     } catch (error) {

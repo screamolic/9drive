@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto'
+import { mimeTypeFromName } from '../files/mime-types.js'
+import { providerFileIdMaxLength, fileNameMaxLength, type RemoteFile } from '../files/provider-sync.utils.js'
 
 export type ResourceType = 'image' | 'video' | 'raw'
 
@@ -36,4 +38,29 @@ export function parseProviderFileId(providerFileId: string) {
   // For image/video the URL carries the format as an extension; the public_id does not.
   const publicId = resourceType === 'raw' ? path : path.replace(/\.[A-Za-z0-9]+$/, '')
   return { resourceType, path, publicId }
+}
+
+export type CloudinaryResource = { public_id: string; format?: string; resource_type?: ResourceType; bytes?: number; created_at?: string }
+
+// Turn an Admin API listing entry into a file record. Returns null when it cannot be stored (id too long).
+export function mapCloudinaryResource(resource: CloudinaryResource, fallbackType: ResourceType): RemoteFile | null {
+  const resourceType = resource.resource_type ?? fallbackType
+  const providerFileId = buildProviderFileId(resourceType, resource.public_id, resource.format)
+  if (providerFileId.length > providerFileIdMaxLength) return null
+  const base = resource.public_id.split('/').pop() ?? resource.public_id
+  // image/video public_ids carry no extension; raw public_ids already do.
+  const name = (resourceType !== 'raw' && resource.format ? `${base}.${resource.format}` : base).slice(0, fileNameMaxLength)
+  const mimeType = mimeTypeFromName(name) !== 'application/octet-stream'
+    ? mimeTypeFromName(name)
+    : resourceType === 'raw' ? 'application/octet-stream' : `${resourceType}/${resource.format ?? 'octet-stream'}`
+  const createdAt = resource.created_at ? new Date(resource.created_at) : undefined
+  return {
+    providerFileId,
+    name,
+    mimeType,
+    sizeBytes: BigInt(Math.max(0, Math.round(resource.bytes ?? 0))),
+    createdAt: createdAt && !Number.isNaN(createdAt.getTime()) ? createdAt : undefined,
+    // Files uploaded through the app are stored as <folder>/<fileId>
+    appFileId: base.replace(/\.[A-Za-z0-9]+$/, ''),
+  }
 }

@@ -34,6 +34,8 @@ Turn this fork of 9Drive into **Multinary**: one dashboard and API that pools ma
 - `providerFileId` build/parse round trip, resource-type mapping, and that the longest allowed value fits `File.providerFileId` (VARCHAR 191).
 - `frontend`: `npm run build` passes (including the queue changes to the API Keys page).
 
+4. **Sync for Cloudinary and S3** (`POST /connected-accounts/:id/sync-files`, plus automatic background sync when an account is first connected; the per-account Sync button in Settings and Quota Tracker calls it). Details in `CLAUDE.md` ("Sync for Cloudinary and S3") and the README section "Syncing existing files". Pure parts (diff, mappings, MIME map) are unit-checked; the Cloudinary listing endpoint and its 500 requests/hour limit are confirmed from Cloudinary's docs, but nothing has run against a real account or database.
+
 ### S3 bugs fixed (inherited from 9Drive)
 
 - `POST /connected-accounts/s3` no longer requires a saved Google config (`providerConfigId` is nullable and only Google code uses it) and no longer returns the encrypted token fields.
@@ -50,6 +52,8 @@ The authoring sandbox could not download Prisma engines, so these never ran:
 - [ ] S3 public URL against a real bucket: connect one with and without `publicBaseUrl`, upload an image, take `mediaUrl` from `GET /api/v1/files` and run `curl -I` on it (must be 200). Confirm the URL shape for each service the owner uses (AWS, R2, MinIO, Wasabi, B2). The URL builder itself is unit-checked, but nothing proves a given bucket is public.
 - [ ] Queue API against a real DB: create a key with the three queue scopes, `POST /queue` with a Cloudinary file id, `POST /queue/claim` twice in parallel (only one call may get the item), `PATCH` it to `posted` and to `failed`, `PATCH` to `pending` to retry, and check a future `scheduledAt` is skipped. Also check 422 `FILE_NOT_PUBLIC` for a Drive/S3 file and that a key without the scope gets 403.
 - [ ] Backend type-check cannot see `prisma.queueItem` until the Prisma client is generated, so TypeScript has not really checked the queue and files routes yet. Run `npm run build` after `prisma generate`.
+- [ ] Sync: put a few files by hand into a Cloudinary account's folder and an S3 prefix (some with unusual extensions), connect each account and wait: they must appear in All Files with sensible names and types and the right sizes. Upload a file through the app and sync again: no duplicate row. Move a file to Trash, sync: it stays in Trash. Delete a file at the source, sync: it is marked deleted. Press Sync twice quickly: the second returns 409. Watch the Cloudinary `X-FeatureRateLimit-Remaining` header on a large account.
+- [ ] Failed initial sync is only logged (`console.error`) and recorded nowhere else, so check the backend log if a freshly connected account shows no files, then press Sync.
 - [ ] S3 fixes: connect an S3 bucket on an install with **no** Google credentials saved (must succeed, and the response must not contain `accessTokenEncrypted`); create a folder, upload an S3 and a Cloudinary file into it, delete the folder, and confirm both objects are gone from the buckets.
 - [ ] Connect two accounts and confirm routing (most available, round robin, priority) alternates between them.
 
@@ -59,6 +63,7 @@ If anything fails, the most likely suspects are the multipart upload in `uploadC
 
 - **No byte limit from Cloudinary.** Plans are credit-based, so the limit is the user-entered `quotaBytes` (empty means unlimited). Used bytes is `max(Usage API, sum of this app's file rows)` because the API can lag.
 - **Free-plan limits.** Per-file size caps apply (see `media_limits` in the Usage API response), and PDF/ZIP/raw delivery can be blocked until enabled in Cloudinary's security settings. The delivery error message already hints at this.
+- **Sync cannot see Cloudinary dynamic-folder-only assets** (matching is by public ID prefix) and skips ids longer than 191 characters.
 - **Whole file is buffered in memory** before upload (same as the S3 and Drive paths). Large files and Cloudinary's chunked upload are not handled.
 - **Only public `upload`-type delivery** is supported. Private or authenticated assets are not.
 

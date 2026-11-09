@@ -1,3 +1,6 @@
+import { mimeTypeFromName } from '../files/mime-types.js'
+import { providerFileIdMaxLength, fileNameMaxLength, type RemoteFile } from '../files/provider-sync.utils.js'
+
 type S3PublicUrlConfig = { bucket: string; region: string; endpoint: string | null; publicBaseUrl: string | null }
 
 function encodeKey(key: string) {
@@ -14,4 +17,24 @@ export function buildS3PublicUrl(config: S3PublicUrlConfig, key: string) {
   if (config.publicBaseUrl) return `${config.publicBaseUrl.replace(/\/+$/, '')}/${encoded}`
   if (!config.endpoint) return `https://${config.bucket}.s3.${config.region}.amazonaws.com/${encoded}`
   return `${config.endpoint.replace(/\/+$/, '')}/${config.bucket}/${encoded}`
+}
+
+export type S3ListedObject = { Key?: string; Size?: number; LastModified?: Date }
+
+// Turn a ListObjectsV2 entry into a file record. Returns null for folder placeholders and keys that cannot be stored.
+export function mapS3Object(object: S3ListedObject): RemoteFile | null {
+  const key = object.Key
+  if (!key || key.endsWith('/') || key.length > providerFileIdMaxLength) return null
+  const segments = key.split('/')
+  const name = segments[segments.length - 1].slice(0, fileNameMaxLength)
+  if (!name) return null
+  return {
+    providerFileId: key,
+    name,
+    mimeType: mimeTypeFromName(name),
+    sizeBytes: BigInt(object.Size ?? 0),
+    createdAt: object.LastModified,
+    // Files uploaded through the app are stored as <prefix>/<userId>/<fileId>/<name>
+    appFileId: segments.length >= 2 ? segments[segments.length - 2] : undefined,
+  }
 }

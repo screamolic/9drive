@@ -3,7 +3,9 @@ import type { CloudinaryConfig, ConnectedAccount, File } from '@prisma/client'
 import type { Response } from 'express'
 import { prisma } from '../../config/prisma.js'
 import { decryptText } from '../../utils/crypto.js'
-import { buildProviderFileId, cloudinaryResourceType, parseProviderFileId, signParams, type ResourceType } from './cloudinary.utils.js'
+import { reconcileProviderFiles, withAccountSyncLock } from '../files/provider-sync.js'
+import type { RemoteFile } from '../files/provider-sync.utils.js'
+import { buildProviderFileId, cloudinaryResourceType, mapCloudinaryResource, parseProviderFileId, signParams, type CloudinaryResource, type ResourceType } from './cloudinary.utils.js'
 
 export { buildCloudinaryPublicId, cloudinaryResourceType } from './cloudinary.utils.js'
 
@@ -105,6 +107,55 @@ export async function syncCloudinaryQuota(accountId: string) {
     where: { connectedAccountId: accountId },
     create: { connectedAccountId: accountId, ...values },
     update: values,
+  })
+}
+
+const listedResourceTypes: ResourceType[] = ['image', 'video', 'raw']
+const maxListingPagesPerType = 400 // 400 x 500 = 200,000 files per resource type
+
+// Admin API: GET /resources/<type>/upload?prefix=<folder>/ , 500 per page, follow next_cursor.
+// Free plans allow 500 Admin API requests per hour (HTTP 420 when exceeded), so a big account needs several syncs.
+// Throws on any failure: a partial listing must never be reconciled, or files would be reported as missing.
+async function listCloudinaryResources(config: CloudinaryConfig) {
+  const { apiKey, apiSecret } = credentials(config)
+  const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')
+  const prefix = `${config.folder.replace(/^\/+|\/+$/g, '')}/`
+  const remote: RemoteFile[] = []
+  let skipped = 0
+
+  for (const resourceType of listedResourceTypes) {
+    let cursor: string | undefined
+    let pages = 0
+    do {
+      const url = new URL(`${apiBase}/${config.cloudName}/resources/${resourceType}/upload`)
+      url.searchParams.set('prefix', prefix)
+      url.searchParams.set('max_results', '500')
+      if (cursor) url.searchParams.set('next_cursor', cursor)
+      const response = await fetch(url, { headers: { Authorization: `Basic ${auth}` } })
+      if (response.status === 420) throw new Error('Cloudinary rate limit reached (free plans allow 500 Admin API requests per hour). Try again later.')
+      if (!response.ok) throw new Error(`Cloudinary listing failed: ${await readCloudinaryError(response)}`)
+      const page = (await response.json()) as { resources?: CloudinaryResource[]; next_cursor?: string }
+      for (const resource of page.resources ?? []) {
+        const mapped = mapCloudinaryResource(resource, resourceType)
+        if (mapped) remote.push(mapped)
+        else skipped += 1
+      }
+      cursor = page.next_cursor
+      pages += 1
+      if (cursor && pages >= maxListingPagesPerType) throw new Error(`Too many Cloudinary files in "${prefix}" to sync in one go.`)
+    } while (cursor)
+  }
+  return { remote, skipped }
+}
+
+// Register files that exist in the account's folder, refresh sizes, mark vanished files as deleted, then refresh quota.
+export async function syncCloudinaryFiles(accountId: string, userId: string) {
+  return withAccountSyncLock(accountId, async () => {
+    const config = await getCloudinaryConfigForAccount(accountId, userId)
+    const { remote, skipped } = await listCloudinaryResources(config)
+    const result = await reconcileProviderFiles({ userId, accountId, provider: 'cloudinary', remote, skipped })
+    await syncCloudinaryQuota(accountId).catch(() => undefined)
+    return result
   })
 }
 

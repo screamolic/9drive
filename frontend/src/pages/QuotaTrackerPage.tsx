@@ -113,9 +113,19 @@ export function QuotaTrackerPage() {
 
   async function sync(accountId: string) {
     setSyncingAccountId(accountId)
+    setMessage('')
     try {
-      await apiFetch(`/connected-accounts/${accountId}/sync-quota`, { method: 'POST' })
+      const provider = accounts.find((account) => account.id === accountId)?.provider
+      if (provider === 's3' || provider === 'cloudinary') {
+        // Cloudinary/S3: also registers files that already exist in the account, then refreshes quota.
+        const data = await apiFetch<{ result: { created: number; updated: number; deleted: number; warning?: string } }>(`/connected-accounts/${accountId}/sync-files`, { method: 'POST' })
+        setMessage(`Sync finished: ${data.result.created} new, ${data.result.updated} updated, ${data.result.deleted} removed.${data.result.warning ? ` ${data.result.warning}` : ''}`)
+      } else {
+        await apiFetch(`/connected-accounts/${accountId}/sync-quota`, { method: 'POST' })
+      }
       await load()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Sync failed')
     } finally {
       setSyncingAccountId(null)
     }

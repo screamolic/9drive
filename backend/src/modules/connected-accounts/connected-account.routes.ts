@@ -7,8 +7,10 @@ import { requireAuth, type AuthRequest } from '../../middleware/auth.middleware.
 import { decryptText, encryptText, hashToken, randomToken } from '../../utils/crypto.js'
 import { hashPassword } from '../../utils/password.js'
 import { createOAuthClient, syncGoogleQuota } from '../google/google.service.js'
-import { syncS3Quota, testS3Connection } from '../s3/s3.service.js'
-import { syncCloudinaryQuota, testCloudinaryConnection } from '../cloudinary/cloudinary.service.js'
+import { syncS3Files, syncS3Quota, testS3Connection } from '../s3/s3.service.js'
+import { syncCloudinaryFiles, syncCloudinaryQuota, testCloudinaryConnection } from '../cloudinary/cloudinary.service.js'
+import { SyncInProgressError } from '../files/provider-sync.js'
+import { createAuditLog } from '../../utils/audit.js'
 
 export const connectedAccountRouter = Router()
 
@@ -32,6 +34,15 @@ const s3ConnectSchema = z.object({
   publicBaseUrl: z.string().url().optional().or(z.literal('')),
   quotaBytes: z.string().regex(/^\d+$/).optional().nullable(),
 })
+
+// Right after an account is connected, register the files that already exist in it.
+// Runs in the background so a big bucket cannot time out the connect request; the user can run it again from Sync.
+function startBackgroundFileSync(provider: 's3' | 'cloudinary', accountId: string, userId: string) {
+  const run = provider === 's3' ? syncS3Files : syncCloudinaryFiles
+  run(accountId, userId)
+    .then((result) => createAuditLog(userId, 'account.sync_files', 'connected_account', accountId, result))
+    .catch((error) => console.error(`Initial ${provider} file sync failed for account ${accountId}:`, error instanceof Error ? error.message : error))
+}
 
 async function syncQuotaForAccount(account: { id: string; provider: string }) {
   if (account.provider === 's3') return syncS3Quota(account.id)
@@ -152,8 +163,10 @@ connectedAccountRouter.post('/s3', requireAuth, async (req: AuthRequest, res, ne
     try {
       await testS3Connection(config)
       const quota = await syncS3Quota(account.id)
+      startBackgroundFileSync('s3', account.id, req.user!.id)
       const { accessTokenEncrypted: _a, refreshTokenEncrypted: _r, ...safeAccount } = account
       return res.status(201).json({
+        fileSync: 'started',
         account: {
           ...safeAccount,
           storageAccount: { ...quota, totalBytes: quota.totalBytes?.toString() ?? null, usedBytes: quota.usedBytes.toString(), availableBytes: quota.availableBytes?.toString() ?? null, trashBytes: quota.trashBytes?.toString() ?? null },
@@ -201,8 +214,10 @@ connectedAccountRouter.post('/cloudinary', requireAuth, async (req: AuthRequest,
     try {
       await testCloudinaryConnection(config)
       const quota = await syncCloudinaryQuota(account.id)
+      startBackgroundFileSync('cloudinary', account.id, req.user!.id)
       const { accessTokenEncrypted: _a, refreshTokenEncrypted: _r, ...safeAccount } = account
       return res.status(201).json({
+        fileSync: 'started',
         account: {
           ...safeAccount,
           storageAccount: { ...quota, totalBytes: quota.totalBytes?.toString() ?? null, usedBytes: quota.usedBytes.toString(), availableBytes: quota.availableBytes?.toString() ?? null, trashBytes: quota.trashBytes?.toString() ?? null },
@@ -338,6 +353,24 @@ connectedAccountRouter.get('/google/callback', async (req, res, next) => {
   } catch (error) {
     console.error('Google OAuth callback failed:', error)
     return res.redirect(`${env.FRONTEND_URL}/google-connected?status=error`)
+  }
+})
+
+// Register files that already exist in a Cloudinary/S3 account, refresh sizes, mark vanished files as deleted, refresh quota.
+// Google Drive accounts keep using POST /files/sync-google.
+connectedAccountRouter.post('/:id/sync-files', requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const account = await prisma.connectedAccount.findFirst({ where: { id: String(req.params.id), userId: req.user!.id, status: 'connected' } })
+    if (!account) return res.status(404).json({ code: 'ACCOUNT_NOT_FOUND', message: 'Connected account not found.' })
+    if (account.provider !== 's3' && account.provider !== 'cloudinary') {
+      return res.status(400).json({ code: 'UNSUPPORTED_PROVIDER', message: 'Use POST /files/sync-google to sync Google Drive accounts.' })
+    }
+    const result = account.provider === 's3' ? await syncS3Files(account.id, req.user!.id) : await syncCloudinaryFiles(account.id, req.user!.id)
+    await createAuditLog(req.user!.id, 'account.sync_files', 'connected_account', account.id, result)
+    return res.json({ status: 'ok', result })
+  } catch (error) {
+    if (error instanceof SyncInProgressError) return res.status(409).json({ code: error.code, message: error.message })
+    return next(error)
   }
 })
 

@@ -42,6 +42,13 @@ Other scripts that `AGENTS.md` doesn't list:
 - API key scopes are `files:upload`, `files:read`, `queue:read`, `queue:write`, chosen at creation (`POST /api-keys`, default upload only). Keys created before the queue existed keep upload only.
 - The queue is API-only for now: there is no dashboard page for it yet.
 
+**Sync for Cloudinary and S3.** `POST /connected-accounts/:id/sync-files` (also started in the background right after `POST /connected-accounts/s3|cloudinary` succeeds) lists the provider and reconciles the `File` table:
+- Listing: `listCloudinaryResources` (Admin API `GET /resources/{image,video,raw}/upload?prefix=<folder>/`, 500 per page, `next_cursor`; HTTP 420 = rate limited, free plans get 500/hour) and `listS3Objects` (`ListObjectsV2` with `Prefix`). Both throw on any error, so a partial listing is never reconciled.
+- Pure helpers (unit-checked): `files/provider-sync.utils.ts` (`diffRemoteFiles`), `files/mime-types.ts`, `mapCloudinaryResource`, `mapS3Object`. DB side: `files/provider-sync.ts` (`reconcileProviderFiles`, per-account in-memory lock `withAccountSyncLock`, `SyncInProgressError` -> HTTP 409).
+- Matching is by `providerFileId` across all statuses, so Trash is never duplicated and trashed files are not resurrected (unlike `syncGoogleAppFolderFiles`). Only `active` rows can be marked deleted. A remote name that embeds an existing row's id (`appFileId`) is skipped, which covers an upload that is still finalizing.
+- Safety: an empty remote listing never marks existing files deleted (returns a `warning`); names or ids longer than the column limits are counted as `skipped`.
+- Not covered: Cloudinary dynamic folder mode (matching is by public ID prefix), and objects/IDs over 191 characters.
+
 **Upload routing** (`modules/uploads/upload.routes.ts`, `selectAccount`):
 1. Re-sync quota for any account whose last sync is more than 5 minutes old.
 2. Subtract bytes already reserved by earlier files in the same multipart request.

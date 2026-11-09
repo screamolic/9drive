@@ -44,6 +44,7 @@ Multinary joins them. Connect as many accounts as you like and you get:
 - Combined quota summary plus a per-account Quota Tracker.
 - Upload routing policies: *most available*, *round-robin*, or *priority order*.
 - Google Drive uploads land in a root folder called `9drive`, and S3 uploads use the prefix `9drive`. A manual **Sync Drive** button brings changes you made in Google Drive back into Multinary. Cloudinary uploads go to the folder you choose when connecting (default `multinary`).
+- **Sync for Cloudinary and S3.** Connecting a Cloudinary or S3 account automatically imports the files that already exist in it (in the background), and the **Sync** button on each account (Settings and Quota Tracker) repeats this at any time. See [Syncing existing files](#syncing-existing-files).
 
 **Files**
 - Upload with a progress panel in the bottom-right corner.
@@ -205,6 +206,24 @@ Things worth knowing:
 - **Free plans have limits.** Cloudinary caps the size of each file by type, and may block delivery of PDF, ZIP and other non-media files until you allow it under its security settings. If a download fails with a 401 or 403, check that setting.
 - **Public URLs.** Images, video and audio are served from `res.cloudinary.com`. `GET /files/:id/view-url` (with your login token) returns that direct URL.
 - Files are held in memory while uploading, so very large files are limited by your server's RAM and by your Cloudinary plan.
+
+## Syncing existing files
+
+Multinary only knows files it uploaded itself. **Sync** makes the database match what is really in a Cloudinary or S3 account:
+
+- **New files are registered.** Anything in the account's folder (Cloudinary, default `multinary`) or prefix (S3, default `9drive`) that Multinary has not seen yet shows up in All Files, counts toward quota, and can be queued. The files themselves are not moved or changed.
+- **Sizes are refreshed**, and files that were deleted at the source are marked as deleted, like **Sync Drive** does for Google.
+- **Files in the Trash stay in the Trash.** Unlike Google Drive sync, they are not brought back.
+- **Only the account's folder or prefix is read.** Files elsewhere in the same account are ignored.
+
+It runs automatically when you connect an account (in the background, so a big bucket cannot time out the form) and whenever you press **Sync**. Only one sync runs per account at a time.
+
+Things worth knowing:
+
+- Imported files get their name and type from the file name or extension, so a file with an unusual extension may show as a generic type.
+- **Cloudinary free plans allow 500 Admin API requests per hour**, and each page of 500 files costs one request per type (image, video, raw). A very large account may need a few syncs spread over time. If the limit is hit, the sync stops with a message and changes nothing.
+- If a sync fails part way, nothing is marked as deleted. If the provider returns no files at all while Multinary knows some, nothing is marked as deleted either (a wrong folder or revoked access looks the same as an empty account); a warning is shown.
+- Cloudinary sync matches files by their public ID prefix. If your Cloudinary account uses *dynamic folder mode* and files sit in a folder only by asset folder, without the folder in their public ID, they will not be found.
 
 ## Connecting Google Drive
 
@@ -409,6 +428,7 @@ Auth          POST /auth/register · POST /auth/login · POST /auth/refresh · P
               GET  /auth/google/url · GET /auth/google/callback · POST /auth/google/exchange
 
 Accounts      GET  /connected-accounts · DELETE /connected-accounts/:id · POST /connected-accounts/:id/sync-quota
+              POST /connected-accounts/:id/sync-files   (Cloudinary and S3: import, refresh and clean up files)
               GET  /connected-accounts/google/connect-url · GET /connected-accounts/google/callback
               POST /connected-accounts/s3
               POST /connected-accounts/cloudinary

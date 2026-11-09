@@ -5,6 +5,9 @@ import type { Response } from 'express'
 import type { Readable } from 'node:stream'
 import { prisma } from '../../config/prisma.js'
 import { decryptText } from '../../utils/crypto.js'
+import { reconcileProviderFiles, withAccountSyncLock } from '../files/provider-sync.js'
+import type { RemoteFile } from '../files/provider-sync.utils.js'
+import { mapS3Object } from './s3.utils.js'
 
 type S3Config = S3StorageConfig
 type FileWithAccount = File & { connectedAccount: ConnectedAccount }
@@ -55,6 +58,36 @@ export async function deleteS3Object(file: FileWithAccount) {
   const config = await getS3ConfigForAccount(file.connectedAccountId)
   const client = createS3Client(config)
   await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: file.providerFileId }))
+}
+
+// List every object under the account's prefix. Throws on any failure so a partial listing is never reconciled.
+async function listS3Objects(config: S3Config) {
+  const client = createS3Client(config)
+  const prefix = `${config.prefix.replace(/^\/+|\/+$/g, '')}/`
+  const remote: RemoteFile[] = []
+  let skipped = 0
+  let continuationToken: string | undefined
+  do {
+    const response = await client.send(new ListObjectsV2Command({ Bucket: config.bucket, Prefix: prefix, ContinuationToken: continuationToken }))
+    for (const object of response.Contents ?? []) {
+      const mapped = mapS3Object(object)
+      if (mapped) remote.push(mapped)
+      else if (object.Key && !object.Key.endsWith('/')) skipped += 1
+    }
+    continuationToken = response.NextContinuationToken
+  } while (continuationToken)
+  return { remote, skipped }
+}
+
+// Register objects under the account's prefix, refresh sizes, mark vanished objects as deleted, then refresh quota.
+export async function syncS3Files(accountId: string, userId: string) {
+  return withAccountSyncLock(accountId, async () => {
+    const config = await getS3ConfigForAccount(accountId, userId)
+    const { remote, skipped } = await listS3Objects(config)
+    const result = await reconcileProviderFiles({ userId, accountId, provider: 's3', remote, skipped })
+    await syncS3Quota(accountId).catch(() => undefined)
+    return result
+  })
 }
 
 export async function syncS3Quota(accountId: string) {
