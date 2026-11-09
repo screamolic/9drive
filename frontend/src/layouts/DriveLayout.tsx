@@ -6,6 +6,7 @@ import {
   FileArchive,
   Gauge,
   History,
+  ListChecks,
   LogOut,
   Menu,
   Moon,
@@ -37,6 +38,7 @@ import { cn } from '@/lib/utils'
 const menu = [
   { label: 'All Files', icon: FileArchive, href: '/all-files' },
   { label: 'Quota Tracker', icon: Gauge, href: '/quota' },
+  { label: 'Queue', icon: ListChecks, href: '/queue' },
   { label: 'Shared With Me', icon: Share2, href: '/shared' },
   { label: 'Starred', icon: Star, href: '/starred', disabled: true },
   { label: 'Recycle Bin', icon: Trash2, href: '/trash' },

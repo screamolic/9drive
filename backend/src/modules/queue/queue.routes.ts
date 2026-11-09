@@ -2,15 +2,14 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../../config/prisma.js'
 import { requireApiKey, type ApiKeyRequest } from '../../middleware/api-key.middleware.js'
-import { fileMediaUrl, fileWithMediaInclude, mediaTypeOf, type FileWithMedia } from '../public-api/media.js'
+import { fileMediaUrl, fileWithMediaInclude } from '../public-api/media.js'
+import { CLAIM_TIMEOUT_MS, itemInclude, loadItem, serializeItem } from './queue.shared.js'
 
 // Content queue for external automation (for example a social media scheduler), driven by API key.
 // Lifecycle: pending -> processing (claimed) -> posted | failed. A failed item can be set back to pending to retry.
 // An item stuck in `processing` for longer than CLAIM_TIMEOUT_MS is handed out again by /claim.
 export const queueRouter = Router()
 
-const CLAIM_TIMEOUT_MS = 15 * 60 * 1000
-const itemInclude = { file: { include: fileWithMediaInclude } } as const
 
 const targetSchema = z.string().trim().min(1).max(191)
 const createSchema = z.object({
@@ -34,39 +33,6 @@ const updateSchema = z.object({
   caption: z.string().max(10000).nullable().optional(),
   scheduledAt: z.string().datetime().nullable().optional(),
 })
-
-type ItemWithFile = Awaited<ReturnType<typeof loadItem>>
-
-function loadItem(id: string, userId: string) {
-  return prisma.queueItem.findFirst({ where: { id, userId }, include: itemInclude })
-}
-
-function serializeItem(item: NonNullable<ItemWithFile>) {
-  const file = item.file as FileWithMedia
-  return {
-    id: item.id,
-    fileId: item.fileId,
-    target: item.target,
-    caption: item.caption,
-    status: item.status,
-    scheduledAt: item.scheduledAt?.toISOString() ?? null,
-    claimedAt: item.claimedAt?.toISOString() ?? null,
-    postedAt: item.postedAt?.toISOString() ?? null,
-    attempts: item.attempts,
-    lastError: item.lastError,
-    externalId: item.externalId,
-    createdAt: item.createdAt.toISOString(),
-    updatedAt: item.updatedAt.toISOString(),
-    file: {
-      id: file.id,
-      name: file.name,
-      mimeType: file.mimeType,
-      mediaType: mediaTypeOf(file.mimeType),
-      sizeBytes: file.sizeBytes.toString(),
-      mediaUrl: fileMediaUrl(file),
-    },
-  }
-}
 
 // POST /api/v1/queue : add a file to the queue.
 queueRouter.post('/', requireApiKey('queue:write'), async (req: ApiKeyRequest, res, next) => {

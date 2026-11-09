@@ -1,4 +1,4 @@
-import { Copy, Download, Edit3, Eye, FolderInput, Info, Link2, Trash2, UserPlus } from 'lucide-react'
+import { Copy, Download, ListPlus, Edit3, Eye, FolderInput, Info, Link2, Trash2, UserPlus } from 'lucide-react'
 import type { FileItem } from '@/data/drive-data'
 
 type Props = {
@@ -14,6 +14,7 @@ type Props = {
   onShare: () => void
   onCopyLink: () => void
   onInvite: () => void
+  onAddToQueue?: () => void
   onDelete: () => void
 }
 
@@ -61,11 +62,11 @@ function MenuItem({ icon: Icon, label, onClick, danger = false, kbd }: { icon: R
   )
 }
 
-export function FileContextMenu({ x, y, file, onClose, onView, onDownload, onRename, onMove, onDetails, onShare, onCopyLink, onInvite, onDelete }: Props) {
+export function FileContextMenu({ x, y, file, onClose, onView, onDownload, onRename, onMove, onDetails, onShare, onCopyLink, onInvite, onAddToQueue, onDelete }: Props) {
   if (!file) return null
 
   const safeX = Math.max(12, Math.min(x, window.innerWidth - 228))
-  const safeY = Math.max(12, Math.min(y, window.innerHeight - 430))
+  const safeY = Math.max(12, Math.min(y, window.innerHeight - 480))
   const kindColor = kindColors[file.kind] ?? 'bg-slate-500'
   const kindLabel = kindLabels[file.kind] ?? 'File'
 
@@ -133,6 +134,7 @@ export function FileContextMenu({ x, y, file, onClose, onView, onDownload, onRen
           <MenuItem icon={Link2} label="Share Link" onClick={handleShare} />
           <MenuItem icon={Copy} label="Copy Link" onClick={handleCopyLink} kbd="Ctrl+L" />
           <MenuItem icon={UserPlus} label="Invite Member" onClick={onInvite} />
+          {onAddToQueue ? <MenuItem icon={ListPlus} label="Add to Queue" onClick={onAddToQueue} /> : null}
 
           <div className="my-1 h-px bg-slate-100 dark:bg-slate-800" />
 

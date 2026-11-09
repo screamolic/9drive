@@ -414,7 +414,18 @@ curl -X PATCH "http://localhost:4000/api/v1/queue/<item id>" \
   -d '{"status":"posted","externalId":"<post id>"}'
 ```
 
-The claimed item includes `file.mediaUrl`, the direct `res.cloudinary.com` URL to hand to the service that publishes it.
+The claimed item includes `file.mediaUrl`, the public URL (Cloudinary delivery URL, or the S3 URL) to hand to the service that publishes it.
+
+### Managing the queue in the dashboard
+
+The **Queue** page in the sidebar shows everything above without curl:
+
+- **Add files:** in All Files select files (or right-click one) and choose **Queue**. Set an optional target label, a caption, a start time, and a spacing in minutes to stagger many files (file 1 at the start time, file 2 N minutes later, and so on). Google Drive files and files already waiting for the same target are skipped and reported.
+- **Overview:** counts for pending, processing, posted and failed; filter by status and target, search file name or caption, sort by claim order, newest, schedule or last change. The list refreshes itself every 15 seconds.
+- **Per item:** thumbnail, schedule, attempts, last error, external post ID; copy or open the public URL; edit target, caption and schedule (pending or failed items); retry a failed item, post a posted item again, release an item a worker never finished (marked `stuck` after 15 minutes), or remove it from the queue (the file stays in storage).
+- **Bulk actions:** select items (or every item matching the current filters) and retry, post again, release, set target, reschedule with spacing, or remove. Actions only touch items in a matching status and report how many changed.
+
+The dashboard uses your login and talks to `/content-queue`; external workers keep using `/api/v1/queue` with an API key. Both change the same rows.
 
 <details>
 <summary><b>Full REST API overview</b></summary>
@@ -453,6 +464,7 @@ Uploads       POST /uploads
 
 Invites       GET /invites · POST /invites · DELETE /invites/:id
 API keys      GET /api-keys · POST /api-keys · DELETE /api-keys/:id
+Queue (UI)    GET/POST /content-queue · PATCH/DELETE /content-queue/:id · POST /content-queue/bulk
 Activity      GET /audit-logs
 Public files  GET /public/files/:token · GET /public/files/:token/download · GET /public/files/:token/preview
 External API  POST /api/v1/uploads   (API key with the files:upload scope)

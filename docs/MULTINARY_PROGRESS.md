@@ -26,7 +26,8 @@ Turn this fork of 9Drive into **Multinary**: one dashboard and API that pools ma
    - `modules/queue/queue.routes.ts` (create, list, claim, get, update, delete), `modules/public-api/public-files.routes.ts` and `media.ts`.
    - API key scopes `files:read`, `queue:read`, `queue:write` (API Keys page now has a scope picker and docs for these endpoints).
    - Design choices: Cloudinary and S3 files can be queued, Google Drive files cannot (Drive has no public file URL). The S3 `mediaUrl` is built from the config (new optional `S3StorageConfig.publicBaseUrl`, migration `20261109070000_s3_public_base_url`) and only works if the bucket allows public reads, so R2 needs `publicBaseUrl`; `target` is a free label (for example one social account per worker); claiming uses an optimistic lock so concurrent workers never get the same item; stuck `processing` items are re-offered after 15 minutes.
-   - **Not built:** a dashboard page for the queue (API only), and the worker that actually posts to a social media service. Those belong to the consumer (for example the Hermes Agent harness) or a later task.
+   - **Dashboard page for the queue** (`/queue`): list with status/target/search/sort filters and paging, status counts, add from All Files (with caption, start time and spacing), edit, retry, post again, release stuck items, remove, bulk actions on selected or all matching items. Backed by `modules/queue/queue-admin.routes.ts` at `/content-queue` (JWT). Frontend `npm run build` passes; it has not been used against a running backend.
+   - **Not built:** the worker that actually posts to a social media service. That belongs to the consumer (for example the Hermes Agent harness) or a later task.
 
 ### Verified
 
@@ -51,6 +52,7 @@ The authoring sandbox could not download Prisma engines, so these never ran:
 - [ ] Against a real Cloudinary account (free is fine): connect the account, upload an image, a video and a PDF, open the public URL from `view-url`, download via the app, zip-download, move to Trash, permanently delete (asset must disappear in Cloudinary), and check that quota and "used" update.
 - [ ] S3 public URL against a real bucket: connect one with and without `publicBaseUrl`, upload an image, take `mediaUrl` from `GET /api/v1/files` and run `curl -I` on it (must be 200). Confirm the URL shape for each service the owner uses (AWS, R2, MinIO, Wasabi, B2). The URL builder itself is unit-checked, but nothing proves a given bucket is public.
 - [ ] Queue API against a real DB: create a key with the three queue scopes, `POST /queue` with a Cloudinary file id, `POST /queue/claim` twice in parallel (only one call may get the item), `PATCH` it to `posted` and to `failed`, `PATCH` to `pending` to retry, and check a future `scheduledAt` is skipped. Also check 422 `FILE_NOT_PUBLIC` for a Drive/S3 file and that a key without the scope gets 403.
+- [ ] Queue dashboard (`/queue`) against a real DB: add several files from All Files with spacing (check the scheduled times and claim order), skipped Drive files are reported, edit a pending item, edit a processing item (must be refused with 409), retry/post again/release, bulk "select all matching" with a status filter, search by caption, and that a worker claiming through `/api/v1/queue/claim` shows up as processing (and `stuck` after 15 minutes).
 - [ ] Backend type-check cannot see `prisma.queueItem` until the Prisma client is generated, so TypeScript has not really checked the queue and files routes yet. Run `npm run build` after `prisma generate`.
 - [ ] Sync: put a few files by hand into a Cloudinary account's folder and an S3 prefix (some with unusual extensions), connect each account and wait: they must appear in All Files with sensible names and types and the right sizes. Upload a file through the app and sync again: no duplicate row. Move a file to Trash, sync: it stays in Trash. Delete a file at the source, sync: it is marked deleted. Press Sync twice quickly: the second returns 409. Watch the Cloudinary `X-FeatureRateLimit-Remaining` header on a large account.
 - [ ] Failed initial sync is only logged (`console.error`) and recorded nowhere else, so check the backend log if a freshly connected account shows no files, then press Sync.
@@ -71,7 +73,6 @@ If anything fails, the most likely suspects are the multipart upload in `uploadC
 
 1. **Verify** everything in "NOT verified" above, then fix what breaks.
 2. **Content queue with an HTTP API.** Built (see "Done" item 3). Remaining:
-   - A dashboard page to view and manage queue items (list, filter by status and target, retry failed, delete, add from All Files).
    - Wire the real consumer (for example the Hermes Agent harness with Repliz): a worker that claims an item, posts `file.mediaUrl`, then reports `posted` with the external post id or `failed` with the error. The owner prefers plain HTTP over MCP.
    - Check whether the consumer needs a file extension in the media URL (image/video URLs include it; raw files do not).
 3. **Dashboard.** The dashboard is this app itself; no separate project is needed. The queue lives in this repository.
@@ -93,4 +94,5 @@ If anything fails, the most likely suspects are the multipart upload in `uploadC
 | Cloudinary service and helpers | `backend/src/modules/cloudinary/` |
 | Provider branching points | `uploads/upload.routes.ts` (`selectAccount`, `handleUpload`), `files/stream-file.ts`, `files/file.routes.ts`, `connected-accounts/connected-account.routes.ts` |
 | Schema and migration | `backend/prisma/schema.prisma`, `backend/prisma/migrations/20261108120000_cloudinary_support/` |
-| UI | `frontend/src/pages/SettingsPage.tsx`, `QuotaTrackerPage.tsx`, `AllFilesPage.tsx` |
+| Queue (API key / dashboard) | `backend/src/modules/queue/` (`queue.routes.ts`, `queue-admin.routes.ts`, `queue.shared.ts`) |
+| UI | `frontend/src/pages/SettingsPage.tsx`, `QuotaTrackerPage.tsx`, `AllFilesPage.tsx`, `QueuePage.tsx` |

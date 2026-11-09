@@ -6,6 +6,7 @@ import { ArchivedPage } from '@/pages/ArchivedPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { GoogleAuthPage } from '@/pages/GoogleAuthPage'
 import { GoogleConnectedPage } from '@/pages/GoogleConnectedPage'
+import { QueuePage } from '@/pages/QueuePage'
 import { QuotaTrackerPage } from '@/pages/QuotaTrackerPage'
 import { RecentPage } from '@/pages/RecentPage'
 import { RegisterPage } from '@/pages/RegisterPage'
@@ -34,6 +35,7 @@ function App() {
           <Route index element={<Navigate to="/all-files" replace />} />
           <Route path="all-files" element={<AllFilesPage />} />
           <Route path="quota" element={<QuotaTrackerPage />} />
+          <Route path="queue" element={<QueuePage />} />
           <Route path="shared" element={<SharedPage />} />
           <Route path="recent" element={<RecentPage />} />
           <Route path="starred" element={<StarredPage />} />
