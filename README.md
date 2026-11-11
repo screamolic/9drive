@@ -2,7 +2,7 @@
 
 <p align="center">
   <b>Many storage accounts, one drive.</b><br />
-  Pool several Cloudinary accounts, Google Drive accounts and S3 buckets behind one self-hosted file manager and upload API.
+  Pool several Cloudinary accounts, S3 buckets and Google Drive accounts behind one self-hosted file manager, upload API and publishing queue.
 </p>
 
 <p align="center">
@@ -12,7 +12,7 @@
   <img alt="Docker ready" src="https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white" />
 </p>
 
-> **Status:** Multinary is a fork of [9Drive](https://github.com/zenhosta/9drive) by Zenhosta, being reshaped around multi-account Cloudinary storage. The Cloudinary provider is new and has not yet been verified end to end against a real account. See [`docs/MULTINARY_PROGRESS.md`](docs/MULTINARY_PROGRESS.md) for what is done, what is still untested, and the plan.
+> **Status:** Multinary is a fork of [9Drive](https://github.com/zenhosta/9drive) by Zenhosta, reshaped around multi-account Cloudinary and S3 storage with public file URLs for automation. The Cloudinary provider, file sync, the files/queue API and the Queue page are new and have **not yet been verified end to end** against real accounts and a real database. There is no built-in worker that posts to a social media service: the queue is consumed by your own tool through the API. See [`docs/MULTINARY_PROGRESS.md`](docs/MULTINARY_PROGRESS.md) for what is done, what is still untested, and the plan.
 
 ---
 
@@ -20,14 +20,16 @@
 
 Free storage tiers are small and scattered. One Google account gives you 15 GB, a free Cloudinary account is tied to monthly credits, and every account fills up on its own schedule.
 
-Multinary joins them. Connect as many accounts as you like and you get:
+Multinary joins them, and keeps every file reachable by a plain public URL so that other tools can fetch it. Connect as many accounts as you like and you get:
 
 - 📦 **One storage pool.** See the combined usage of every connected account on one dashboard.
 - 🧭 **Uploads that pick the right account.** Each file goes to an account that has room. You choose the rule: most free space, round-robin, or your own priority order.
-- ☁️ **Cloudinary at the center.** Connect any number of Cloudinary accounts. Images, video and audio get a direct public URL that other tools can use.
+- ☁️ **Cloudinary and S3 at the center.** Files on either one have a direct public URL (`mediaUrl`) that a scheduler or any other service can use. Google Drive stays supported as plain storage, but Drive files have no public URL.
+- 🔄 **Bring existing files in.** Connecting a Cloudinary or S3 account imports what is already there, and **Sync** keeps the list current.
+- 📬 **A publishing queue.** Pick files, give them a target, caption and schedule, and let your automation claim them one by one over the API. A **Queue** page manages it all.
 - 🗂️ **A normal file manager.** Folders, search, list and grid views, previews, rename, move, and bulk actions.
 - 🔗 **Sharing that works.** Public links with a built-in viewer, embeds, and invites for files and folders.
-- 🔌 **An upload API.** Send files from scripts or CI with an API key.
+- 🔌 **An API.** Upload from scripts or CI, list files with their public URLs, and drive the queue, all with scoped API keys.
 - 🏠 **Your own server.** Files pass through your backend to your storage. Nothing is written to the server's disk.
 
 ## Storage providers
@@ -35,8 +37,14 @@ Multinary joins them. Connect as many accounts as you like and you get:
 | Provider | What you connect | Limit used for routing |
 | --- | --- | --- |
 | **Cloudinary** | Cloud name, API key and API secret (one entry per account) | The quota you enter in GB. Empty means unlimited. |
-| **Google Drive** | A Google account through OAuth | The account's real quota, read from Google. |
 | **S3-compatible** | Bucket, region, optional endpoint, optional public URL, access keys. Works with AWS S3, Cloudflare R2, MinIO, Wasabi, Backblaze B2 or any custom endpoint. | The quota you enter in bytes. Empty means unlimited. |
+| **Google Drive** | A Google account through OAuth | The account's real quota, read from Google. |
+
+| | Public URL for automation | Import existing files | Can be queued |
+| --- | --- | --- | --- |
+| Cloudinary | Yes, direct delivery URL | Yes | Yes |
+| S3-compatible | Yes, if the bucket or Public URL allows public reads | Yes | Yes |
+| Google Drive | No | Yes (**Sync Drive**) | No |
 
 ## Features
 
@@ -56,6 +64,11 @@ Multinary joins them. Connect as many accounts as you like and you get:
 - Public share links with a viewer and an embed mode.
 - Invite people to a file or folder as a viewer or editor.
 - Activity log.
+
+**Publishing queue**
+- **Queue page** in the sidebar: add files from All Files (right-click or multi-select), with an optional target label, caption, start time and spacing between files.
+- Filter by status or target, search, sort, edit, retry failed items, post again, release stuck items, and run bulk actions on selected or all matching items.
+- Workers claim items over the API, so two workers never receive the same item. See [Files and queue API](#files-and-queue-api).
 
 **For developers**
 - An external upload API at `POST /api/v1/uploads` with API keys. Keys are shown once, stored hashed, track when they were last used, and can be revoked.
@@ -181,10 +194,11 @@ Then run `npm run prisma:migrate` in `backend/` and start both dev servers as sh
 ### Your first five minutes
 
 1. Open http://localhost:5173 and **register**, or use **Continue with Google** (this connects your first Drive automatically).
-2. Go to **Settings** and connect storage: **Connect Cloudinary**, **Connect Drive**, or **Connect S3**. Add as many accounts as you want.
+2. Go to **Settings** and connect storage: **Connect Cloudinary**, **Connect S3**, or **Connect Drive**. Add as many accounts as you want. Existing files in a Cloudinary or S3 account are imported in the background.
 3. Open **Quota Tracker** to see your combined storage and choose an upload routing mode.
 4. Go to **All Files**, create a folder, and upload something. Watch the progress panel in the corner.
-5. Right-click the file and choose **Share Link**, then open the link in a private window.
+5. Right-click a Cloudinary or S3 file and choose **Add to Queue**, then open the **Queue** page to see it. Create an API key under **API Keys** (with the queue scopes) to let a worker claim it.
+6. Right-click a file and choose **Share Link** (Google Drive files only), then open the link in a private window.
 
 ## Connecting Cloudinary
 
@@ -206,6 +220,18 @@ Things worth knowing:
 - **Free plans have limits.** Cloudinary caps the size of each file by type, and may block delivery of PDF, ZIP and other non-media files until you allow it under its security settings. If a download fails with a 401 or 403, check that setting.
 - **Public URLs.** Images, video and audio are served from `res.cloudinary.com`. `GET /files/:id/view-url` (with your login token) returns that direct URL.
 - Files are held in memory while uploading, so very large files are limited by your server's RAM and by your Cloudinary plan.
+
+## Connecting S3
+
+Open **Settings → Connect S3** and fill in the display name, bucket, region, access key ID and secret access key (stored encrypted). Everything else is optional:
+
+| Field | Notes |
+| --- | --- |
+| Endpoint | Leave empty for AWS S3. Set it for R2, MinIO, Wasabi, Backblaze B2 and other S3-compatible services. |
+| Public URL | The public base address of the bucket or its CDN, for example `https://cdn.example.com` or an R2 `https://pub-xxx.r2.dev` URL. Used to build `mediaUrl`. **Required for Cloudflare R2.** |
+| Storage quota | Optional, in bytes. Leave empty for unlimited. |
+
+Objects are stored under the prefix `9drive` inside the bucket, and only objects under it are managed and synced. Google credentials are **not** needed to connect S3. For files to be usable by automation, the bucket (or the Public URL) must allow public reads; see [Files and queue API](#files-and-queue-api) for how to check a URL.
 
 ## Syncing existing files
 
@@ -530,7 +556,8 @@ Vite bakes `VITE_API_URL` into the build. Rebuild the frontend, or with Docker r
 - Uploads pass through the backend straight to Cloudinary, Google Drive or S3. **Nothing is stored on the server's disk.**
 - Google tokens and S3 and Cloudinary credentials are encrypted in MySQL. App refresh tokens, API keys, preview tokens, and auth-handoff tokens are stored only as hashes.
 - CORS only allows `FRONTEND_URL`.
-- Cloudinary files are served from public URLs. Anyone who has the URL can open the file, so don't upload anything private to a Cloudinary account you connect.
+- Cloudinary files, and S3 files whose bucket or Public URL allows public reads, are served from public URLs. Anyone who has the URL can open the file, so don't upload anything private to an account you connect for automation.
+- API keys carry scopes (`files:upload`, `files:read`, `queue:read`, `queue:write`). Give a worker only what it needs.
 - Never commit `.env` files or share `TOKEN_ENCRYPTION_KEY`, `JWT_ACCESS_SECRET`, `RECAPTCHA_SECRET_KEY`, OAuth client secrets, Cloudinary API secrets, or raw share links you want to keep private.
 
 ## Project structure
@@ -541,7 +568,7 @@ frontend/   React 19 + Vite + Tailwind CSS 4 app (installable PWA)
 docs/       Progress and plan (MULTINARY_PROGRESS.md)
 ```
 
-Build checks: `cd backend && npm run build` and `cd frontend && npm run build`.
+Build checks: `cd backend && npm run build` and `cd frontend && npm run build`. There is no test runner; see the checklist in [`docs/MULTINARY_PROGRESS.md`](docs/MULTINARY_PROGRESS.md) for what to verify by hand.
 
 ## Credits and license
 
