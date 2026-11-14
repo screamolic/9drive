@@ -71,9 +71,11 @@ Multinary joins them. Connect as many accounts as you like and you get:
 
 ## Quick start
 
+Two ways to run Multinary. They are independent: the Docker path never touches your local Node.js or MySQL, and the local path never uses Docker. Pick one, don't mix them.
+
 ### Option A: Docker (recommended)
 
-You only need Docker. MySQL is included.
+You only need Docker. Nothing else: no Node.js, no local MySQL.
 
 ```bash
 git clone https://github.com/screamolic/9drive.git
@@ -84,6 +86,8 @@ docker compose up -d --build
 ```
 
 Then open **http://localhost:5173** and create an account. 🎉
+
+Note: `MYSQL_*` values in `.env` are for the MySQL container. `JWT_ACCESS_SECRET` and `TOKEN_ENCRYPTION_KEY` are the only secrets you must change to get started.
 
 The backend runs the database migrations on every start, so updating an existing install keeps your data.
 
@@ -108,6 +112,8 @@ docker compose down -v              # stop and delete the database volume
 ### Option B: Run locally (for development)
 
 You need **Node.js 20+**, **npm**, and **MySQL 8+** running on your machine.
+
+> **Already ran the Docker stack?** Stop it first (`docker compose down`), or change the ports. Both setups use ports 3306, 4000, and 5173, so they cannot run at the same time.
 
 **1. Run the setup script.** It writes `backend/.env` and `frontend/.env` with secure random keys, installs dependencies, and generates the Prisma client.
 
@@ -265,9 +271,11 @@ Captcha only turns on when **both** `VITE_RECAPTCHA_SITE_KEY` and `RECAPTCHA_SEC
    nano .env
    ```
    - `FRONTEND_URL`: your public frontend URL, e.g. `https://multinary.yourdomain.com`
-   - `VITE_API_URL`: your public backend URL, e.g. `https://api.multinary.yourdomain.com`
+   - `VITE_API_URL`: your public backend URL, e.g. `https://api.multinary.yourdomain.com` (baked into the frontend image at build)
    - Strong random values for `JWT_ACCESS_SECRET` and `TOKEN_ENCRYPTION_KEY`
 3. **Start it:** `docker compose up -d --build`
+
+   Every later change to `VITE_API_URL` or `VITE_RECAPTCHA_SITE_KEY` needs a rebuild: `docker compose up -d --build`.
 
 Production tips:
 - Put the frontend and backend behind an HTTPS reverse proxy.
