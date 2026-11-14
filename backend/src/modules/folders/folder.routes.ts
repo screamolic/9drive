@@ -273,8 +273,10 @@ folderRouter.delete('/:id', async (req: AuthRequest, res, next) => {
     }
 
     const files = await prisma.file.findMany({ where: { userId: req.user!.id, status: 'active', folderId: { in: [...folderIds] } }, include: { connectedAccount: true } })
+    // Remote deletion on Google Drive only applies to Drive files; Cloudinary and S3 files are removed via Trash permanent delete.
+    const driveFiles = files.filter((file) => file.connectedAccount.provider === 'google_drive')
     const syncedAccountIds = new Set<string>()
-    for (const file of files) {
+    for (const file of driveFiles) {
       try {
         const auth = await getAuthedGoogleClient(file.connectedAccount)
         const drive = google.drive({ version: 'v3', auth })
