@@ -296,7 +296,7 @@ model Folder {
   userId             String            @map("user_id") @db.Char(36)
   parentId           String?           @map("parent_id") @db.Char(36)
   connectedAccountId String?           @map("connected_account_id") @db.Char(36)
-  provider           String            @default("google_drive") @db.VarChar(32)
+  provider           String            @default("cloudinary") @db.VarChar(32)
   providerFolderId   String?           @map("provider_folder_id") @db.VarChar(191)
   name               String            @db.VarChar(255)
   color              String            @default("text-blue-500") @db.VarChar(64)

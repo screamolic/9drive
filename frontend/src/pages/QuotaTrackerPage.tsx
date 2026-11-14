@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle, Cloud, CloudUpload, Database, Filter, Gauge, Link2, RefreshCw } from 'lucide-react'
+import { CheckCircle, Cloud, CloudUpload, Database, Filter, Gauge, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { PageHeader } from '@/components/drive/PageHeader'
@@ -14,7 +14,7 @@ type RoutingPolicy = { mode: RoutingMode; priorityAccountIds: string[]; roundRob
 function providerLabel(provider: string) {
   if (provider === 's3') return 'S3 Storage'
   if (provider === 'cloudinary') return 'Cloudinary'
-  return 'Google Drive'
+  return 'Cloudinary'
 }
 
 function ProviderIcon({ provider }: { provider: string }) {
@@ -23,12 +23,12 @@ function ProviderIcon({ provider }: { provider: string }) {
 }
 
 function storageLimitLabel(account: ConnectedAccount) {
-  if (account.provider !== 'google_drive' && account.storageAccount?.totalBytes === null) return 'Unlimited'
+  if (account.storageAccount?.totalBytes === null) return 'Unlimited'
   return formatBytes(account.storageAccount?.totalBytes)
 }
 
 function availableLabel(account: ConnectedAccount) {
-  if (account.provider !== 'google_drive' && account.storageAccount?.availableBytes === null) return 'Unlimited'
+  if (account.storageAccount?.availableBytes === null) return 'Unlimited'
   return formatBytes(account.storageAccount?.availableBytes)
 }
 
@@ -83,34 +83,6 @@ export function QuotaTrackerPage() {
     return () => window.clearInterval(timer)
   }, [autoRefresh])
 
-  useEffect(() => {
-    function onMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin || event.data?.type !== 'GOOGLE_CONNECTED') return
-      setMessage(event.data.status === 'success' ? 'Google Drive connected.' : 'Google Drive connection failed.')
-      load().catch(() => undefined)
-    }
-    window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
-  }, [])
-
-  async function connectDrive() {
-    const popup = window.open('', 'google-drive-connect', 'width=540,height=720')
-    if (popup) {
-      popup.document.write('<html><head><title>Connecting...</title><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#64748b;}</style></head><body><div style="text-align:center;"><h2>Connecting to Google...</h2><p>Please wait while we redirect you.</p></div></body></html>')
-    }
-    try {
-      const data = await apiFetch<{ url: string }>('/connected-accounts/google/connect-url')
-      if (popup) {
-        popup.location.href = data.url
-      } else {
-        window.location.href = data.url
-      }
-    } catch (e) {
-      if (popup) popup.close()
-      console.error('Failed to start Google Drive connection from Quota Tracker', e)
-    }
-  }
-
   async function sync(accountId: string) {
     setSyncingAccountId(accountId)
     try {
@@ -148,7 +120,7 @@ export function QuotaTrackerPage() {
 
   return (
     <>
-      <PageHeader title="Quota Tracker" description="Track and manage connected provider storage limits." actions={<><Button variant="outline" onClick={() => setAutoRefresh(!autoRefresh)}><CheckCircle className="h-4 w-4" />Auto-refresh {autoRefresh ? 'On' : 'Off'}</Button><Button variant="outline" onClick={refresh} disabled={refreshing}><RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{refreshing ? 'Refreshing...' : 'Refresh'}</Button><Button onClick={connectDrive}><Link2 className="h-4 w-4" />Connect Drive</Button></>} />
+      <PageHeader title="Quota Tracker" description="Track and manage connected provider storage limits." actions={<><Button variant="outline" onClick={() => setAutoRefresh(!autoRefresh)}><CheckCircle className="h-4 w-4" />Auto-refresh {autoRefresh ? 'On' : 'Off'}</Button><Button variant="outline" onClick={refresh} disabled={refreshing}><RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />{refreshing ? 'Refreshing...' : 'Refresh'}</Button></>} />
       {message ? <p className="mt-5 rounded-xl bg-blue-50 p-3 text-sm text-blue-700">{message}</p> : null}
 
       <div className="mt-8 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
@@ -188,9 +160,8 @@ export function QuotaTrackerPage() {
         {accounts.length === 0 ? (
           <Card className="col-span-full p-8 text-center">
             <Cloud className="mx-auto h-10 w-10 text-blue-600" />
-            <h2 className="mt-4 text-xl font-extrabold">No connected drives</h2>
-            <p className="mt-2 text-sm text-slate-500">Connect Google Drive, S3-compatible storage or Cloudinary to start tracking quota.</p>
-            <Button className="mt-5" onClick={connectDrive}><Link2 className="h-4 w-4" />Connect Drive</Button>
+            <h2 className="mt-4 text-xl font-extrabold">No connected accounts</h2>
+            <p className="mt-2 text-sm text-slate-500">Connect S3-compatible storage or Cloudinary to start tracking quota.</p>
           </Card>
         ) : accounts.map((account) => {
           const percent = pct(account)

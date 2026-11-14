@@ -10,8 +10,6 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
-    "seed:google-config": "tsx src/scripts/seed-google-config.ts",
-    "seed:google-config:docker": "tsx src/scripts/seed-google-config-if-present.ts",
     "test:s3": "tsx src/scripts/test-s3-connection.ts",
     "test:api-upload": "tsx src/scripts/test-api-upload.ts"
   },
@@ -29,7 +27,6 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "googleapis": "^173.0.0",
     "jsonwebtoken": "^9.0.3",
     "prisma": "^6.19.3",
     "undici": "^7.27.1",

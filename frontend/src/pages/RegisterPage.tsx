@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { HardDrive } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { GoogleLogo } from '@/components/auth/GoogleLogo'
 import { Input } from '@/components/ui/input'
 import { apiFetch } from '@/lib/api'
 import { setAuthSession, type AuthUser } from '@/lib/auth'
@@ -28,7 +27,6 @@ export function RegisterPage() {
   const [captchaToken, setCaptchaToken] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [googleLoading, setGoogleLoading] = useState(false)
   const recaptchaRef = useRef<HTMLDivElement | null>(null)
   const recaptchaWidgetId = useRef<number | null>(null)
 
@@ -56,18 +54,6 @@ export function RegisterPage() {
       renderCaptcha()
     }
   }, [])
-
-  async function continueWithGoogle() {
-    setGoogleLoading(true)
-    setError('')
-    try {
-      const data = await apiFetch<{ url: string }>('/auth/google/url', { skipAuth: true })
-      window.location.href = data.url
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google register failed')
-      setGoogleLoading(false)
-    }
-  }
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -108,7 +94,6 @@ export function RegisterPage() {
         </form>
         <div className="mt-4 grid gap-3">
           <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-slate-400"><span className="h-px flex-1 bg-slate-200" />or<span className="h-px flex-1 bg-slate-200" /></div>
-          <Button variant="outline" disabled={googleLoading} onClick={continueWithGoogle}><GoogleLogo />{googleLoading ? 'Redirecting...' : 'Continue with Google and connect Drive'}</Button>
         </div>
         <p className="mt-5 text-center text-sm text-slate-500">Already registered? <Link className="font-bold text-blue-600" to="/login">Login</Link></p>
       </Card>

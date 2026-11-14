@@ -1,15 +1,12 @@
 import { Router } from 'express'
-import { google } from 'googleapis'
 import { z } from 'zod'
 import { prisma } from '../../config/prisma.js'
 import { env } from '../../config/env.js'
 import { requireAuth, type AuthRequest } from '../../middleware/auth.middleware.js'
 import { hashToken, randomToken } from '../../utils/crypto.js'
-import { getAuthedGoogleClient, syncGoogleAppFolderFiles, syncGoogleQuota } from '../google/google.service.js'
 import { deleteS3Object, syncS3Quota, createS3Client, getS3ConfigForAccount } from '../s3/s3.service.js'
 import { deleteCloudinaryObject, getCloudinaryConfigForAccount, getCloudinaryDeliveryUrl, openCloudinaryStream, syncCloudinaryQuota } from '../cloudinary/cloudinary.service.js'
 import { streamProviderFile } from './stream-file.js'
-import { googleDownloadExportMimeTypes, normalizeHeaders, withExtension } from './stream-google-file.js'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { Readable } from 'node:stream'
 import { ZipArchive } from 'archiver'
@@ -178,9 +175,7 @@ fileRouter.delete('/batch/permanent', async (req: AuthRequest, res, next) => {
         } else if (file.provider === 'cloudinary') {
           await deleteCloudinaryObject(file)
         } else {
-          const auth = await getAuthedGoogleClient(file.connectedAccount)
-          const drive = google.drive({ version: 'v3', auth })
-          await drive.files.delete({ fileId: file.providerFileId })
+          throw new Error(`Unsupported storage provider "${file.provider}".`)
         }
         deletedIds.push(file.id)
         syncedAccountIds.add(file.connectedAccountId)
@@ -202,8 +197,6 @@ fileRouter.delete('/batch/permanent', async (req: AuthRequest, res, next) => {
         await syncS3Quota(accountId).catch(() => undefined)
       } else if (account?.provider === 'cloudinary') {
         await syncCloudinaryQuota(accountId).catch(() => undefined)
-      } else {
-        await syncGoogleQuota(accountId).catch(() => undefined)
       }
     }
 
@@ -240,25 +233,13 @@ fileRouter.get('/shared-links', async (req: AuthRequest, res, next) => {
   }
 })
 
-fileRouter.post('/sync-google', async (req: AuthRequest, res, next) => {
-  try {
-    const body = z.object({ connectedAccountId: z.string().min(1).optional() }).parse(req.body ?? {})
-    const accounts = await prisma.connectedAccount.findMany({
-      where: { userId: req.user!.id, provider: 'google_drive', status: 'connected', ...(body.connectedAccountId ? { id: body.connectedAccountId } : {}) },
-      select: { id: true },
-    })
+fileRouter.post('/sync-google', async (_req, res) =>
+  res.status(410).json({
+    code: 'GOOGLE_SYNC_REMOVED',
+    message: 'Google Drive sync was removed with Drive support.',
+  })
+)
 
-    const results = []
-    for (const account of accounts) results.push(await syncGoogleAppFolderFiles(account.id, req.user!.id))
-
-    return res.json({
-      status: 'ok',
-      results,
-    })
-  } catch (error) {
-    return next(error)
-  }
-})
 
 fileRouter.get('/:id', async (req: AuthRequest, res, next) => {
   try {
@@ -275,9 +256,7 @@ fileRouter.patch('/:id', async (req: AuthRequest, res, next) => {
     const body = z.object({ name: z.string().min(1).max(255).optional(), folderId: z.string().nullable().optional() }).parse(req.body)
     const fileId = String(req.params.id)
     const file = await prisma.file.findFirstOrThrow({ where: { id: fileId, userId: req.user!.id }, include: { connectedAccount: true } })
-    const drive = file.provider !== 'google_drive' ? null : google.drive({ version: 'v3', auth: await getAuthedGoogleClient(file.connectedAccount) })
     if (body.folderId) await prisma.folder.findFirstOrThrow({ where: { id: body.folderId, userId: req.user!.id, deletedAt: null } })
-    if (body.name && drive) await drive.files.update({ fileId: file.providerFileId, requestBody: { name: body.name } })
     const updated = await prisma.file.update({ where: { id: file.id }, data: { ...(body.name ? { name: body.name } : {}), ...(body.folderId !== undefined ? { folderId: body.folderId } : {}) }, include: { connectedAccount: { select: { id: true, email: true, provider: true } }, folder: { select: { id: true, name: true } } } })
     await createAuditLog(req.user!.id, 'UPDATE_FILE', 'file', updated.id, { name: updated.name, updates: body })
     return res.json({ file: { ...updated, sizeBytes: updated.sizeBytes.toString() } })
@@ -310,22 +289,12 @@ fileRouter.post('/:id/public-permission', requireAuth, async (req: AuthRequest, 
   try {
     const fileId = String(req.params.id)
     const file = await prisma.file.findFirstOrThrow({ where: { id: fileId, userId: req.user!.id }, include: { connectedAccount: true } })
-    if (file.provider !== 'google_drive') {
-      return res.status(400).json({ code: 'UNSUPPORTED_PROVIDER', message: 'Only Google Drive files can be made public.' })
-    }
-    const auth = await getAuthedGoogleClient(file.connectedAccount)
-    const drive = google.drive({ version: 'v3', auth })
-    await drive.permissions.create({
-      fileId: file.providerFileId,
-      requestBody: {
-        role: 'writer',
-        type: 'anyone'
-      }
+    return res.status(410).json({
+      code: 'PUBLIC_PERMISSION_REMOVED',
+      message: 'Per-file Google Drive permissions were removed with Drive support. Cloudinary files are public by URL; use GET /files/:id/view-url.',
     })
-    const metadata = await drive.files.get({ fileId: file.providerFileId, fields: 'webViewLink,webContentLink' })
-    return res.json({ status: 'ok', url: metadata.data.webViewLink ?? metadata.data.webContentLink })
-  } catch (error: any) {
-    return res.status(500).json({ code: 'GOOGLE_API_ERROR', message: error.message || 'Failed to update Google Drive permissions.' })
+  } catch (error) {
+    return next(error)
   }
 })
 
@@ -356,29 +325,12 @@ fileRouter.get('/:id/view-url', async (req: AuthRequest, res, next) => {
   try {
     const fileId = String(req.params.id)
     const file = await prisma.file.findFirstOrThrow({ where: { id: fileId, userId: req.user!.id }, include: { connectedAccount: true } })
-    if (file.provider === 's3') return res.json({ url: null })
     if (file.provider === 'cloudinary') {
       const config = await getCloudinaryConfigForAccount(file.connectedAccountId)
       return res.json({ url: getCloudinaryDeliveryUrl(config, file.providerFileId) })
     }
-    const auth = await getAuthedGoogleClient(file.connectedAccount)
-    const drive = google.drive({ version: 'v3', auth })
-
-    // Automatically set permission to public writer when retrieving/copying the view URL!
-    try {
-      await drive.permissions.create({
-        fileId: file.providerFileId,
-        requestBody: {
-          role: 'writer',
-          type: 'anyone'
-        }
-      })
-    } catch (err: any) {
-      console.error('Failed to make Google Drive file public during view-url retrieval:', err.message || err)
-    }
-
-    const metadata = await drive.files.get({ fileId: file.providerFileId, fields: 'webViewLink,webContentLink' })
-    return res.json({ url: metadata.data.webViewLink ?? metadata.data.webContentLink })
+    if (file.provider === 's3') return res.json({ url: null })
+    return res.status(400).json({ code: 'UNSUPPORTED_PROVIDER', message: `Unsupported storage provider "${file.provider}".` })
   } catch (error) {
     return next(error)
   }
@@ -436,18 +388,8 @@ fileRouter.post('/batch-download', async (req: AuthRequest, res, next) => {
         } else if (file.provider === 'cloudinary') {
           stream = await openCloudinaryStream(file)
         } else {
-          const auth = await getAuthedGoogleClient(file.connectedAccount)
-          const headers = normalizeHeaders(await auth.getRequestHeaders())
-          const exportTarget = googleDownloadExportMimeTypes[file.mimeType]
-          if (exportTarget) {
-            fileName = withExtension(file.name, exportTarget.extension)
-          }
-          const url = exportTarget
-            ? `https://www.googleapis.com/drive/v3/files/${file.providerFileId}/export?mimeType=${encodeURIComponent(exportTarget.mimeType)}`
-            : `https://www.googleapis.com/drive/v3/files/${file.providerFileId}?alt=media`
-          const response = await fetch(url, { headers })
-          if (!response.ok || !response.body) continue
-          stream = Readable.fromWeb(response.body as any)
+          console.error(`Skipping ${file.name}: unsupported storage provider "${file.provider}".`)
+          continue
         }
         archive.append(stream, { name: fileName })
       } catch (err) {

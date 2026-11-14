@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, type FormEvent } from 'react'
-import { Bell, Cloud, CloudUpload, Database, Globe, HardDrive, Link2, RefreshCw, Trash2 } from 'lucide-react'
+import { Bell, CloudUpload, Database, Globe, HardDrive, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { DummyModal } from '@/components/drive/DummyModal'
@@ -13,16 +13,16 @@ type ConnectedAccount = { id: string; provider: string; email: string; displayNa
 function providerLabel(provider: string) {
   if (provider === 's3') return 'S3 Storage'
   if (provider === 'cloudinary') return 'Cloudinary'
-  return 'Google Drive'
+  return 'Cloudinary'
 }
 
 function storageLimitLabel(account: ConnectedAccount) {
-  if (account.provider !== 'google_drive' && account.storageAccount?.totalBytes === null) return 'Unlimited'
+  if (account.storageAccount?.totalBytes === null) return 'Unlimited'
   return formatBytes(account.storageAccount?.totalBytes)
 }
 
 function availableLabel(account: ConnectedAccount) {
-  if (account.provider !== 'google_drive' && account.storageAccount?.availableBytes === null) return 'Unlimited'
+  if (account.storageAccount?.availableBytes === null) return 'Unlimited'
   return formatBytes(account.storageAccount?.availableBytes)
 }
 
@@ -30,7 +30,6 @@ export function SettingsPage() {
   const user = getStoredUser()
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
   const [message, setMessage] = useState('')
-  const [connecting, setConnecting] = useState(false)
   const [s3Open, setS3Open] = useState(false)
   const [connectingS3, setConnectingS3] = useState(false)
   const [s3Form, setS3Form] = useState({ name: '', bucket: '', region: 'us-east-1', endpoint: '', accessKeyId: '', secretAccessKey: '', forcePathStyle: false, quotaBytes: '' })
@@ -47,14 +46,6 @@ export function SettingsPage() {
   const [updateModalOpen, setUpdateModalOpen] = useState(false)
   const [updateModalTitle, setUpdateModalTitle] = useState('')
 
-  // Google OAuth Config states
-  const [googleClientId, setGoogleClientId] = useState('')
-  const [googleClientSecret, setGoogleClientSecret] = useState('')
-  const [googleRedirectUri, setGoogleRedirectUri] = useState('')
-  const [defaultRedirectUri, setDefaultRedirectUri] = useState('')
-  const [hasSecret, setHasSecret] = useState(false)
-  const [savingGoogleConfig, setSavingGoogleConfig] = useState(false)
-  const [showGoogleHelp, setShowGoogleHelp] = useState(false)
 
   // Live log polling states
   const [isPollingLog, setIsPollingLog] = useState(false)
@@ -216,46 +207,11 @@ export function SettingsPage() {
     }
   }
 
-  async function saveGoogleConfig(event: FormEvent) {
-    event.preventDefault()
-    setSavingGoogleConfig(true)
-    setMessage('')
-    try {
-      const res = await apiFetch<{ message: string }>('/system/google-config', {
-        method: 'POST',
-        body: JSON.stringify({
-          clientId: googleClientId,
-          clientSecret: googleClientSecret || undefined,
-          redirectUri: googleRedirectUri || defaultRedirectUri,
-        }),
-      })
-      setMessage(res.message || 'Google OAuth credentials saved.')
-      setHasSecret(true)
-      setGoogleClientSecret('')
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Failed to save Google OAuth configuration')
-    } finally {
-      setSavingGoogleConfig(false)
-    }
-  }
-
   const selectedAccount = accounts.find((account) => account.id === selectedAccountId) ?? accounts[0] ?? null
 
   async function load() {
     const data = await apiFetch<{ accounts: ConnectedAccount[] }>('/connected-accounts')
     setAccounts(data.accounts)
-
-    try {
-      const configData = await apiFetch<{ exists: boolean; clientId: string; redirectUri: string; hasSecret: boolean; defaultRedirectUri: string }>('/system/google-config')
-      if (configData.exists) {
-        setGoogleClientId(configData.clientId || '')
-        setGoogleRedirectUri(configData.redirectUri || '')
-        setHasSecret(configData.hasSecret || false)
-      }
-      setDefaultRedirectUri(configData.defaultRedirectUri || '')
-    } catch (e) {
-      console.error('Failed to load global Google config', e)
-    }
   }
 
   useEffect(() => {
@@ -274,40 +230,6 @@ export function SettingsPage() {
     }
     if (!accounts.some((account) => account.id === selectedAccountId)) setSelectedAccountId(accounts[0].id)
   }, [accounts, selectedAccountId])
-
-  useEffect(() => {
-    function onMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin || event.data?.type !== 'GOOGLE_CONNECTED') return
-      setMessage(event.data.status === 'success' ? 'Google Drive connected.' : 'Google Drive connection failed.')
-      load().then(() => {
-        window.dispatchEvent(new Event('9drive:storage-changed'))
-      }).catch(() => undefined)
-    }
-    window.addEventListener('message', onMessage)
-    return () => window.removeEventListener('message', onMessage)
-  }, [])
-
-  async function connectDrive() {
-    setConnecting(true)
-    setMessage('')
-    const popup = window.open('', 'google-drive-connect', 'width=540,height=720')
-    if (popup) {
-      popup.document.write('<html><head><title>Connecting...</title><style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f8fafc;color:#64748b;}</style></head><body><div style="text-align:center;"><h2>Connecting to Google...</h2><p>Please wait while we redirect you.</p></div></body></html>')
-    }
-    try {
-      const data = await apiFetch<{ url: string }>('/connected-accounts/google/connect-url')
-      if (popup) {
-        popup.location.href = data.url
-      } else {
-        window.location.href = data.url
-      }
-    } catch (error) {
-      if (popup) popup.close()
-      setMessage(error instanceof Error ? error.message : 'Failed to start Google Drive connection')
-    } finally {
-      setConnecting(false)
-    }
-  }
 
   async function sync(accountId: string) {
     setSyncingAccountId(accountId)
@@ -378,7 +300,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Setting" description="Manage account and connected storage." actions={<><Button variant="outline" size="sm" onClick={() => setCloudinaryOpen(true)}><CloudUpload className="h-4 w-4" />Connect Cloudinary</Button><Button variant="outline" size="sm" onClick={() => setS3Open(true)}><Database className="h-4 w-4" />Connect S3</Button><Button size="sm" onClick={connectDrive} disabled={connecting}><Link2 className="h-4 w-4" />{connecting ? 'Connecting...' : 'Connect Drive'}</Button></>} />
+      <PageHeader title="Setting" description="Manage account and connected storage." actions={<><Button variant="outline" size="sm" onClick={() => setCloudinaryOpen(true)}><CloudUpload className="h-4 w-4" />Connect Cloudinary</Button><Button variant="outline" size="sm" onClick={() => setS3Open(true)}><Database className="h-4 w-4" />Connect S3</Button></>} />
       {message ? <p className="mt-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-700">{message}</p> : null}
       <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_280px]">
         <div className="grid gap-4">
@@ -397,16 +319,6 @@ export function SettingsPage() {
                 />
               )}
               <div className="flex-1"><h2 className="text-lg font-bold">{user?.name ?? 'User'}</h2><p className="text-xs text-slate-500 mt-0.5">{user?.email ?? '-'}</p></div>
-            </div>
-          </Card>
-
-          <Card className="overflow-hidden p-3.5">
-            <div className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2.5"><Cloud className="h-5 w-5 text-blue-600" /><h2 className="text-[16px] font-bold">Google Drive</h2></div>
-                <p className="mt-1 text-[13px] text-slate-500">Connect one or more Google Drive accounts. Multinary will route uploads to account with enough space.</p>
-              </div>
-              <Button className="w-full sm:w-32" size="sm" onClick={connectDrive} disabled={connecting}><Link2 className="h-4 w-4" />{connecting ? 'Opening...' : 'Connect Drive'}</Button>
             </div>
           </Card>
 
@@ -450,82 +362,6 @@ export function SettingsPage() {
             </div>
           </Card>
 
-          <Card className="p-4">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-4">
-              <div className="flex items-center gap-2.5">
-                <Cloud className="h-5 w-5 text-blue-600" />
-                <h2 className="text-[17px] font-bold">Google OAuth Credentials</h2>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs font-semibold"
-                type="button"
-                onClick={() => setShowGoogleHelp(!showGoogleHelp)}
-              >
-                {showGoogleHelp ? 'Hide Guide' : 'Setup Guide'}
-              </Button>
-            </div>
-
-            {showGoogleHelp && (
-              <div className="mb-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 p-3.5 text-[13px] leading-relaxed text-slate-600 border border-slate-100 dark:border-slate-800">
-                <p className="font-bold text-slate-800 dark:text-slate-200 mb-1.5">How to setup Google credentials:</p>
-                <ol className="list-decimal pl-4 space-y-1.5">
-                  <li>Go to <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google Cloud Console</a>.</li>
-                  <li>Enable the <strong>Google Drive API</strong> in your project.</li>
-                  <li>Go to <strong>APIs & Services &gt; Credentials</strong>, click <strong>Create Credentials &gt; OAuth client ID</strong>.</li>
-                  <li>Set application type to <strong>Web application</strong>.</li>
-                  <li>Add this exact URL under <strong>Authorized redirect URIs</strong>:
-                    <div className="mt-1 flex items-center gap-1.5 font-mono text-[11px] bg-white dark:bg-slate-950 p-1.5 rounded border border-slate-200 dark:border-slate-800 select-all overflow-x-auto">
-                      {googleRedirectUri || defaultRedirectUri}
-                    </div>
-                  </li>
-                  <li>Copy the generated <strong>Client ID</strong> and <strong>Client Secret</strong> into the form below and save.</li>
-                </ol>
-              </div>
-            )}
-
-            <form onSubmit={saveGoogleConfig} className="grid gap-3.5">
-              <label className="grid gap-1.5 text-xs font-bold text-slate-500">
-                Client ID
-                <input
-                  className="h-10 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 text-sm focus:border-blue-600 focus:outline-none"
-                  placeholder="Enter Google Client ID"
-                  value={googleClientId}
-                  onChange={(e) => setGoogleClientId(e.target.value)}
-                  required
-                />
-              </label>
-
-              <label className="grid gap-1.5 text-xs font-bold text-slate-500">
-                Client Secret {hasSecret && <span className="font-normal text-emerald-600">(Already Configured)</span>}
-                <input
-                  className="h-10 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 text-sm focus:border-blue-600 focus:outline-none"
-                  type="password"
-                  placeholder={hasSecret ? "••••••••••••••••••••••••" : "Enter Google Client Secret"}
-                  value={googleClientSecret}
-                  onChange={(e) => setGoogleClientSecret(e.target.value)}
-                  required={!hasSecret}
-                />
-              </label>
-
-              <label className="grid gap-1.5 text-xs font-bold text-slate-500">
-                Redirect URI (Optional)
-                <input
-                  className="h-10 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 px-3 text-sm focus:border-blue-600 focus:outline-none"
-                  placeholder={defaultRedirectUri}
-                  value={googleRedirectUri}
-                  onChange={(e) => setGoogleRedirectUri(e.target.value)}
-                />
-              </label>
-
-              <div className="flex justify-end mt-1">
-                <Button type="submit" disabled={savingGoogleConfig} size="sm">
-                  {savingGoogleConfig ? 'Saving...' : 'Save Credentials'}
-                </Button>
-              </div>
-            </form>
-          </Card>
 
           <Card className="overflow-hidden p-3.5">
             <div className="flex flex-col gap-3.5 sm:flex-row sm:items-center sm:justify-between">
