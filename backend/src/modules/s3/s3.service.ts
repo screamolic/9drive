@@ -43,6 +43,17 @@ export function buildS3ObjectKey(config: Pick<S3Config, 'prefix'>, userId: strin
   return `${config.prefix.replace(/^\/+|\/+$/g, '')}/${userId}/${fileId}/${safeFileName(fileName)}`
 }
 
+/**
+ * Direct public URL for an S3 object, or null when the bucket has no public
+ * base URL configured (e.g. AWS S3 buckets without website hosting).
+ * Example: https://pub-xxx.r2.dev/<key> (Cloudflare R2 managed public access).
+ */
+export function getS3PublicUrl(config: S3Config, key: string) {
+  if (!config.publicBaseUrl) return null
+  const base = config.publicBaseUrl.replace(/\/+$/, '')
+  return `${base}/${key.split('/').map(encodeURIComponent).join('/')}`
+}
+
 export async function uploadS3Object(config: S3Config, key: string, body: NodeJS.ReadableStream, mimeType: string) {
   const client = createS3Client(config)
   await new Upload({

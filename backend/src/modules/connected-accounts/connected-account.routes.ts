@@ -27,6 +27,7 @@ const s3ConnectSchema = z.object({
   accessKeyId: z.string().min(1),
   secretAccessKey: z.string().min(1),
   forcePathStyle: z.boolean().optional(),
+  publicBaseUrl: z.string().url().optional().or(z.literal('')),
   quotaBytes: z.string().regex(/^\d+$/).optional().nullable(),
 })
 
@@ -112,6 +113,7 @@ connectedAccountRouter.post('/s3', requireAuth, async (req: AuthRequest, res, ne
         accessKeyIdEncrypted: encryptText(body.accessKeyId),
         secretAccessKeyEncrypted: encryptText(body.secretAccessKey),
         forcePathStyle: body.forcePathStyle ?? Boolean(body.endpoint),
+        publicBaseUrl: body.publicBaseUrl || null,
         quotaBytes: body.quotaBytes ? BigInt(body.quotaBytes) : null,
       },
       update: {
@@ -122,6 +124,7 @@ connectedAccountRouter.post('/s3', requireAuth, async (req: AuthRequest, res, ne
         accessKeyIdEncrypted: encryptText(body.accessKeyId),
         secretAccessKeyEncrypted: encryptText(body.secretAccessKey),
         forcePathStyle: body.forcePathStyle ?? Boolean(body.endpoint),
+        publicBaseUrl: body.publicBaseUrl || null,
         quotaBytes: body.quotaBytes ? BigInt(body.quotaBytes) : null,
         status: 'active',
       },

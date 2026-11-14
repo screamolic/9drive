@@ -4,8 +4,9 @@ import { prisma } from '../../config/prisma.js'
 import { env } from '../../config/env.js'
 import { requireAuth, type AuthRequest } from '../../middleware/auth.middleware.js'
 import { hashToken, randomToken } from '../../utils/crypto.js'
-import { deleteS3Object, syncS3Quota, createS3Client, getS3ConfigForAccount } from '../s3/s3.service.js'
+import { deleteS3Object, syncS3Quota, createS3Client } from '../s3/s3.service.js'
 import { deleteCloudinaryObject, getCloudinaryConfigForAccount, getCloudinaryDeliveryUrl, openCloudinaryStream, syncCloudinaryQuota } from '../cloudinary/cloudinary.service.js'
+import { getS3ConfigForAccount, getS3PublicUrl } from '../s3/s3.service.js'
 import { streamProviderFile } from './stream-file.js'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { Readable } from 'node:stream'
@@ -329,7 +330,10 @@ fileRouter.get('/:id/view-url', async (req: AuthRequest, res, next) => {
       const config = await getCloudinaryConfigForAccount(file.connectedAccountId)
       return res.json({ url: getCloudinaryDeliveryUrl(config, file.providerFileId) })
     }
-    if (file.provider === 's3') return res.json({ url: null })
+    if (file.provider === 's3') {
+      const config = await getS3ConfigForAccount(file.connectedAccountId)
+      return res.json({ url: getS3PublicUrl(config, file.providerFileId) })
+    }
     return res.status(400).json({ code: 'UNSUPPORTED_PROVIDER', message: `Unsupported storage provider "${file.provider}".` })
   } catch (error) {
     return next(error)
