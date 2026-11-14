@@ -42,9 +42,6 @@ if (-not (Test-Path -LiteralPath $backendEnv)) {
         "REFRESH_TOKEN_TTL_DAYS=30"
         "MAX_UPLOAD_BYTES=5368709120"
         "RECAPTCHA_SECRET_KEY=`"`""
-        "GOOGLE_CLIENT_ID=`"`""
-        "GOOGLE_CLIENT_SECRET=`"`""
-        "GOOGLE_REDIRECT_URI=`"http://localhost:4000/connected-accounts/google/callback`""
     ) | Set-Content -LiteralPath $backendEnv -Encoding UTF8
     Write-Host "Created backend/.env"
 }
